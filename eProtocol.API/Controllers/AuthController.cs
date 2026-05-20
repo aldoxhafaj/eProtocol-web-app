@@ -1,10 +1,12 @@
 using eProtocol.Application.Auth;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace eProtocol.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[AllowAnonymous]
 public sealed class AuthController(IAuthService authService) : ControllerBase
 {
     [HttpPost("login")]

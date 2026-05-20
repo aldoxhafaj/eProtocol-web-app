@@ -1,5 +1,4 @@
 using AutoMapper;
-using AutoMapper;
 using eProtocol.Application.Abstractions;
 using eProtocol.Domain.Entities;
 using eProtocol.Domain.Enums;
@@ -39,6 +38,7 @@ public class DocumentService(
             Description = request.Description?.Trim(),
             Classification = request.Classification,
             Type = request.Type,
+            Priority = request.Priority,
             Status = DocumentStatus.Registered,
             ProtocolNumber = number,
             ProtocolYear = year,
@@ -73,6 +73,7 @@ public class DocumentService(
         {
             DocumentId = documentId,
             UserId = request.UserId,
+            Deadline = request.Deadline,
             AssignedById = userContext.UserId
         };
 
@@ -152,5 +153,28 @@ public class DocumentService(
 
         return query.Where(d => d.Classification == DocumentClassification.Public ||
                                 (d.Classification == DocumentClassification.Restricted && d.Assignments.Any(a => a.UserId == userContext.UserId)));
+    }
+
+    public async Task<IReadOnlyList<DocumentDto>> GetMyAssignmentsAsync(CancellationToken cancellationToken = default)
+    {
+        var documents = await dbContext.Documents
+            .AsNoTracking()
+            .Include(d => d.Assignments).ThenInclude(a => a.User)
+            .Where(d => d.Assignments.Any(a => a.UserId == userContext.UserId))
+            .OrderByDescending(d => d.CreatedAt)
+            .ToListAsync(cancellationToken);
+
+        return documents.Select(mapper.Map<DocumentDto>).ToList();
+    }
+
+    public async Task CompleteAssignmentAsync(Guid assignmentId, CancellationToken cancellationToken = default)
+    {
+        var assignment = await dbContext.DocumentAssignments.FirstOrDefaultAsync(a => a.Id == assignmentId, cancellationToken);
+        if (assignment is null)
+            throw new InvalidOperationException("Assignment not found.");
+
+        assignment.IsCompleted = true;
+        assignment.CompletedAt = DateTimeOffset.UtcNow;
+        await dbContext.SaveChangesAsync(cancellationToken);
     }
 }

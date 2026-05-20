@@ -23,8 +23,9 @@ public static class DependencyInjection
         services.AddScoped<IJwtTokenService, SimpleJwtTokenService>();
         services.AddScoped<IFileStorage, LocalFileStorage>();
         services.AddScoped<IProtocolNumberService, ProtocolNumberService>();
-        services.AddScoped<INotificationService, NoOpNotificationService>();
+        services.AddScoped<INotificationService, NotificationStorageService>();
         services.AddScoped<IUserContext, HttpUserContext>();
+        services.AddScoped<IScannerService, StubScannerService>();
         services.AddHttpContextAccessor();
 
         return services;

@@ -30,7 +30,8 @@ public class UserService(IApplicationDbContext dbContext, IPasswordHasher passwo
             return;
         }
 
-        dbContext.Users.Remove(user);
+        user.IsActive = false;
+        user.UpdatedAt = DateTimeOffset.UtcNow;
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 

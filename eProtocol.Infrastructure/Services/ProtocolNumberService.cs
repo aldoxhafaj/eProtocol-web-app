@@ -15,14 +15,21 @@ public sealed class ProtocolNumberService(ApplicationDbContext dbContext) : IPro
 
         if (sequence is null)
         {
-            sequence = new Domain.Entities.ProtocolSequence { Year = year, LastNumber = 0 };
+            sequence = new Domain.Entities.ProtocolSequence { Year = year, StartNumber = 1, EndNumber = int.MaxValue, LastNumber = 0 };
             dbContext.ProtocolSequences.Add(sequence);
         }
 
-        sequence.LastNumber += 1;
+        var next = sequence.LastNumber == 0 ? sequence.StartNumber : sequence.LastNumber + 1;
+
+        if (next > sequence.EndNumber)
+        {
+            throw new InvalidOperationException($"Protocol number series exhausted for year {year}.");
+        }
+
+        sequence.LastNumber = next;
         await dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
-        return (sequence.LastNumber, year);
+        return (next, year);
     }
 }

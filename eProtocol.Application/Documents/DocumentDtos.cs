@@ -9,21 +9,33 @@ public record DocumentDto(
     DocumentClassification Classification,
     DocumentType Type,
     DocumentStatus Status,
+    DocumentPriority Priority,
     int ProtocolNumber,
     int ProtocolYear,
     Guid? InstitutionId,
     DateTimeOffset? Deadline,
-    Guid FileId);
+    Guid FileId,
+    IReadOnlyList<DocumentAssignmentDto>? Assignments);
+
+public record DocumentAssignmentDto(
+    Guid Id,
+    Guid UserId,
+    string? UserName,
+    DateTimeOffset AssignedAt,
+    DateTimeOffset? Deadline,
+    bool IsCompleted,
+    DateTimeOffset? CompletedAt);
 
 public record CreateDocumentRequest(
     string Title,
     string? Description,
     DocumentClassification Classification,
     DocumentType Type,
+    DocumentPriority Priority,
     Guid? InstitutionId,
     DateTimeOffset? Deadline);
 
-public record AssignDocumentRequest(Guid UserId);
+public record AssignDocumentRequest(Guid UserId, DateTimeOffset? Deadline);
 
 public record DocumentSearchRequest(
     DocumentType? Type,

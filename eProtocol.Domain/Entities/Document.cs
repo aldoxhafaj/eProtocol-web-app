@@ -10,6 +10,7 @@ public class Document : BaseEntity
     public DocumentClassification Classification { get; set; } = DocumentClassification.Public;
     public DocumentType Type { get; set; } = DocumentType.Internal;
     public DocumentStatus Status { get; set; } = DocumentStatus.Draft;
+    public DocumentPriority Priority { get; set; } = DocumentPriority.Normal;
     public int ProtocolNumber { get; set; }
     public int ProtocolYear { get; set; }
     public DateTimeOffset? Deadline { get; set; }

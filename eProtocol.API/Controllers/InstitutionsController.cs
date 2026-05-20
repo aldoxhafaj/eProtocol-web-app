@@ -1,10 +1,12 @@
 using eProtocol.Application.Institutions;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace eProtocol.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public sealed class InstitutionsController(IInstitutionService institutionService) : ControllerBase
 {
     [HttpGet]

@@ -1,10 +1,12 @@
 using eProtocol.Application.Documents;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace eProtocol.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public sealed class DocumentsController(IDocumentService documentService) : ControllerBase
 {
     [HttpGet]
@@ -22,6 +24,7 @@ public sealed class DocumentsController(IDocumentService documentService) : Cont
     }
 
     [HttpPost]
+    [Authorize(Roles = "Administrator,Manager")]
     public async Task<ActionResult<DocumentDto>> Create([FromForm] CreateDocumentRequest request, IFormFile file, CancellationToken cancellationToken)
     {
         if (file is null)
@@ -34,9 +37,24 @@ public sealed class DocumentsController(IDocumentService documentService) : Cont
     }
 
     [HttpPost("{id:guid}/assignments")]
+    [Authorize(Roles = "Administrator,Manager")]
     public async Task<IActionResult> Assign(Guid id, [FromBody] AssignDocumentRequest request, CancellationToken cancellationToken)
     {
         await documentService.AssignAsync(id, request, cancellationToken);
+        return NoContent();
+    }
+
+    [HttpGet("my-assignments")]
+    public async Task<ActionResult<IReadOnlyList<DocumentDto>>> GetMyAssignments(CancellationToken cancellationToken)
+    {
+        var documents = await documentService.GetMyAssignmentsAsync(cancellationToken);
+        return Ok(documents);
+    }
+
+    [HttpPost("assignments/{assignmentId:guid}/complete")]
+    public async Task<IActionResult> CompleteAssignment(Guid assignmentId, CancellationToken cancellationToken)
+    {
+        await documentService.CompleteAssignmentAsync(assignmentId, cancellationToken);
         return NoContent();
     }
 }

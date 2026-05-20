@@ -30,7 +30,8 @@ public class InstitutionService(IApplicationDbContext dbContext, IMapper mapper)
             return;
         }
 
-        dbContext.Institutions.Remove(institution);
+        institution.IsActive = false;
+        institution.UpdatedAt = DateTimeOffset.UtcNow;
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
@@ -58,6 +59,7 @@ public class InstitutionService(IApplicationDbContext dbContext, IMapper mapper)
         institution.ContactEmail = request.ContactEmail?.Trim();
         institution.ContactPhone = request.ContactPhone?.Trim();
         institution.Address = request.Address?.Trim();
+        institution.IsActive = request.IsActive;
         institution.UpdatedAt = DateTimeOffset.UtcNow;
 
         await dbContext.SaveChangesAsync(cancellationToken);

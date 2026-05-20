@@ -1,10 +1,12 @@
 using eProtocol.Application.Users;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace eProtocol.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Roles = "Administrator")]
 public sealed class UsersController(IUserService userService) : ControllerBase
 {
     [HttpGet]

@@ -18,6 +18,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<DocumentAssignment> DocumentAssignments => Set<DocumentAssignment>();
     public DbSet<DocumentAudit> DocumentAudits => Set<DocumentAudit>();
     public DbSet<ProtocolSequence> ProtocolSequences => Set<ProtocolSequence>();
+    public DbSet<Notification> Notifications => Set<Notification>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

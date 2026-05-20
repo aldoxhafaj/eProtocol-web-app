@@ -12,6 +12,9 @@ public sealed class MappingProfile : Profile
     {
         CreateMap<User, UserDto>();
         CreateMap<Institution, InstitutionDto>();
-        CreateMap<Document, DocumentDto>();
+        CreateMap<Document, DocumentDto>()
+            .ForCtorParam("Assignments", opt => opt.MapFrom(src => src.Assignments));
+        CreateMap<DocumentAssignment, DocumentAssignmentDto>()
+            .ForCtorParam("UserName", opt => opt.MapFrom(src => src.User != null ? src.User.UserName : null));
     }
 }

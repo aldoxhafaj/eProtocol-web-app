@@ -12,5 +12,6 @@ public interface IApplicationDbContext
     DbSet<DocumentAssignment> DocumentAssignments { get; }
     DbSet<DocumentAudit> DocumentAudits { get; }
     DbSet<ProtocolSequence> ProtocolSequences { get; }
+    DbSet<Notification> Notifications { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

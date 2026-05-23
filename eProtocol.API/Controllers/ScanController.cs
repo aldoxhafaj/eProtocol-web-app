@@ -11,11 +11,21 @@ namespace eProtocol.API.Controllers;
 public sealed class ScanController(IScannerService scannerService, IDocumentService documentService) : ControllerBase
 {
     [HttpPost]
-    public async Task<ActionResult<DocumentDto>> ScanAndCreate([FromForm] CreateDocumentRequest request, CancellationToken cancellationToken)
+    public async Task<ActionResult<DocumentDto>> ScanAndCreate([FromForm] CreateDocumentRequest request, IFormFile? file, CancellationToken cancellationToken)
     {
-        var scannedStream = await scannerService.ScanAsync(cancellationToken);
-        var formFile = new StreamFormFile(scannedStream, "scanned_document.pdf", "application/pdf");
-        var document = await documentService.CreateAsync(request, formFile, cancellationToken);
+        IFormFile sourceFile;
+
+        if (file is null)
+        {
+            var scannedStream = await scannerService.ScanAsync(cancellationToken);
+            sourceFile = new StreamFormFile(scannedStream, "scanned_document.pdf", "application/pdf");
+        }
+        else
+        {
+            sourceFile = file;
+        }
+
+        var document = await documentService.CreateAsync(request, sourceFile, cancellationToken);
         return Ok(document);
     }
 

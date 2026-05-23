@@ -1,4 +1,5 @@
 using AutoMapper;
+using AutoMapper;
 using eProtocol.Application.Abstractions;
 using eProtocol.Domain.Entities;
 using eProtocol.Domain.Enums;
@@ -22,15 +23,7 @@ public class DocumentService(
         await using var fileStream = file.OpenReadStream();
         var storageResult = await fileStorage.SaveAsync(new FileStorageRequest(file.FileName, file.ContentType, fileStream, request.Classification == DocumentClassification.Secret), cancellationToken);
 
-        var documentFile = new DocumentFile
-        {
-            FileName = file.FileName,
-            ContentType = file.ContentType,
-            Size = storageResult.Size,
-            Hash = storageResult.Hash,
-            StoragePath = storageResult.StoragePath,
-            IsEncrypted = request.Classification == DocumentClassification.Secret
-        };
+        var documentFile = await ResolveDocumentFileAsync(storageResult, file, request.Classification == DocumentClassification.Secret, cancellationToken);
 
         var document = new Document
         {
@@ -39,16 +32,15 @@ public class DocumentService(
             Classification = request.Classification,
             Type = request.Type,
             Priority = request.Priority,
-            Status = DocumentStatus.Registered,
+            Status = DocumentStatus.Pending,
             ProtocolNumber = number,
             ProtocolYear = year,
             InstitutionId = request.InstitutionId,
             Deadline = request.Deadline,
             CreatedById = userContext.UserId,
-            File = documentFile
+            FileId = documentFile.Id
         };
 
-        dbContext.DocumentFiles.Add(documentFile);
         dbContext.Documents.Add(document);
         dbContext.DocumentAudits.Add(new DocumentAudit
         {
@@ -61,12 +53,74 @@ public class DocumentService(
         return mapper.Map<DocumentDto>(document);
     }
 
-    public async Task AssignAsync(Guid documentId, AssignDocumentRequest request, CancellationToken cancellationToken = default)
+    public async Task<DocumentDto> UpdateAsync(Guid id, UpdateDocumentRequest request, IFormFile? file, CancellationToken cancellationToken = default)
     {
-        var document = await dbContext.Documents.FirstOrDefaultAsync(d => d.Id == documentId, cancellationToken);
+        var document = await dbContext.Documents
+            .Include(d => d.File)
+            .Include(d => d.Assignments)
+            .FirstOrDefaultAsync(d => d.Id == id && !d.IsDeleted, cancellationToken);
+
         if (document is null)
         {
             throw new InvalidOperationException("Document not found.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Title))
+        {
+            document.Title = request.Title.Trim();
+        }
+
+        if (request.Description is not null)
+        {
+            document.Description = request.Description.Trim();
+        }
+
+        if (request.Classification.HasValue)
+        {
+            document.Classification = request.Classification.Value;
+        }
+
+        if (request.Type.HasValue)
+        {
+            document.Type = request.Type.Value;
+        }
+
+        if (request.Priority.HasValue)
+        {
+            document.Priority = request.Priority.Value;
+        }
+
+        if (request.Deadline.HasValue)
+        {
+            document.Deadline = request.Deadline;
+        }
+
+        if (file is not null)
+        {
+            await using var fileStream = file.OpenReadStream();
+            var shouldEncrypt = document.Classification == DocumentClassification.Secret;
+            var storageResult = await fileStorage.SaveAsync(new FileStorageRequest(file.FileName, file.ContentType, fileStream, shouldEncrypt), cancellationToken);
+            var documentFile = await ResolveDocumentFileAsync(storageResult, file, shouldEncrypt, cancellationToken);
+            document.FileId = documentFile.Id;
+        }
+
+        document.UpdatedAt = DateTimeOffset.UtcNow;
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return mapper.Map<DocumentDto>(document);
+    }
+
+    public async Task AssignAsync(Guid documentId, AssignDocumentRequest request, CancellationToken cancellationToken = default)
+    {
+        var document = await dbContext.Documents.FirstOrDefaultAsync(d => d.Id == documentId && !d.IsDeleted, cancellationToken);
+        if (document is null)
+        {
+            throw new InvalidOperationException("Document not found.");
+        }
+
+        if (document.Status == DocumentStatus.Archived)
+        {
+            throw new InvalidOperationException("Cannot assign tracking to an Archived document.");
         }
 
         var assignment = new DocumentAssignment
@@ -74,11 +128,18 @@ public class DocumentService(
             DocumentId = documentId,
             UserId = request.UserId,
             Deadline = request.Deadline,
-            AssignedById = userContext.UserId
+            AssignedById = userContext.UserId,
+            Status = Domain.Enums.AssignmentStatus.Pending
         };
 
         dbContext.DocumentAssignments.Add(assignment);
-        document.Status = DocumentStatus.Assigned;
+
+        // Automatically transition to InProgress
+        if (document.Status == DocumentStatus.Pending)
+        {
+            document.Status = DocumentStatus.InProgress;
+        }
+
         dbContext.DocumentAudits.Add(new DocumentAudit
         {
             DocumentId = documentId,
@@ -95,16 +156,39 @@ public class DocumentService(
     {
         IQueryable<Document> query = dbContext.Documents
             .AsNoTracking()
-            .Include(d => d.Assignments);
+            .Include(d => d.Assignments)
+            .Where(d => !d.IsDeleted);
 
         query = ApplyAccessControl(query);
         var document = await query.FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
         return document is null ? null : mapper.Map<DocumentDto>(document);
     }
 
+    public async Task<DocumentFileDownloadDto?> GetFileAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var document = await dbContext.Documents
+            .AsNoTracking()
+            .Include(d => d.File)
+            .Include(d => d.Assignments)
+            .FirstOrDefaultAsync(d => d.Id == id && !d.IsDeleted, cancellationToken);
+
+        if (document is null)
+        {
+            return null;
+        }
+
+        if (!CanAccessDocumentFile(document))
+        {
+            throw new UnauthorizedAccessException("You do not have access to this file.");
+        }
+
+        var stream = await fileStorage.OpenReadAsync(document.File.StoragePath, document.File.IsEncrypted, cancellationToken);
+        return new DocumentFileDownloadDto(stream, document.File.ContentType, document.File.FileName);
+    }
+
     public async Task<IReadOnlyList<DocumentDto>> SearchAsync(DocumentSearchRequest request, CancellationToken cancellationToken = default)
     {
-        var query = dbContext.Documents.AsNoTracking();
+        var query = dbContext.Documents.AsNoTracking().Where(d => !d.IsDeleted);
 
         if (request.Type.HasValue)
         {
@@ -143,10 +227,45 @@ public class DocumentService(
         return documents.Select(mapper.Map<DocumentDto>).ToList();
     }
 
+    public async Task<IReadOnlyList<DocumentAssignmentDto>?> GetAssignmentsAsync(Guid documentId, CancellationToken cancellationToken = default)
+    {
+        var document = await dbContext.Documents
+            .AsNoTracking()
+            .Include(d => d.Assignments)
+                .ThenInclude(a => a.User)
+            .FirstOrDefaultAsync(d => d.Id == documentId && !d.IsDeleted, cancellationToken);
+
+        if (document is null)
+        {
+            return null;
+        }
+
+        if (!CanAccessDocumentAssignments(document))
+        {
+            return null;
+        }
+
+        return document.Assignments.Select(mapper.Map<DocumentAssignmentDto>).ToList();
+    }
+
+    public async Task<bool> RemoveAssignmentAsync(Guid documentId, Guid assignmentId, CancellationToken cancellationToken = default)
+    {
+        var assignment = await dbContext.DocumentAssignments
+            .FirstOrDefaultAsync(a => a.Id == assignmentId && a.DocumentId == documentId, cancellationToken);
+
+        if (assignment is null)
+        {
+            return false;
+        }
+
+        dbContext.DocumentAssignments.Remove(assignment);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
     private IQueryable<Document> ApplyAccessControl(IQueryable<Document> query)
     {
-        if (string.Equals(userContext.Role, UserRole.Administrator.ToString(), StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(userContext.Role, UserRole.Manager.ToString(), StringComparison.OrdinalIgnoreCase))
+        if (IsAdminOrManager())
         {
             return query;
         }
@@ -176,5 +295,128 @@ public class DocumentService(
         assignment.IsCompleted = true;
         assignment.CompletedAt = DateTimeOffset.UtcNow;
         await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var document = await dbContext.Documents
+            .Include(d => d.File)
+            .FirstOrDefaultAsync(d => d.Id == id && !d.IsDeleted, cancellationToken);
+        if (document is null)
+        {
+            return false;
+        }
+
+        // Soft-delete by default (hard-delete via DeletionPolicy for admins)
+        document.IsDeleted = true;
+        document.DeletedAt = DateTimeOffset.UtcNow;
+        document.DeletedById = userContext.UserId;
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public async Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var document = await dbContext.Documents.FirstOrDefaultAsync(d => d.Id == id && !d.IsDeleted, cancellationToken);
+        if (document is null)
+            throw new InvalidOperationException("Document not found.");
+
+        if (document.Status == DocumentStatus.Archived)
+            throw new InvalidOperationException("Document is already archived.");
+
+        document.Status = DocumentStatus.Archived;
+        document.UpdatedAt = DateTimeOffset.UtcNow;
+
+        dbContext.DocumentAudits.Add(new DocumentAudit
+        {
+            DocumentId = id,
+            Action = "Archived",
+            PerformedById = userContext.UserId
+        });
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task UnarchiveAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var document = await dbContext.Documents
+            .Include(d => d.Assignments)
+            .FirstOrDefaultAsync(d => d.Id == id && !d.IsDeleted, cancellationToken);
+
+        if (document is null)
+            throw new InvalidOperationException("Document not found.");
+
+        if (document.Status != DocumentStatus.Archived)
+            throw new InvalidOperationException("Document is not archived.");
+
+        var hasIncompleteAssignments = document.Assignments.Any(a => !a.IsCompleted);
+        document.Status = hasIncompleteAssignments ? DocumentStatus.InProgress : DocumentStatus.Pending;
+        document.UpdatedAt = DateTimeOffset.UtcNow;
+
+        dbContext.DocumentAudits.Add(new DocumentAudit
+        {
+            DocumentId = id,
+            Action = "Unarchived",
+            PerformedById = userContext.UserId
+        });
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task<DocumentFile> ResolveDocumentFileAsync(FileStorageResult storageResult, IFormFile file, bool isEncrypted, CancellationToken cancellationToken)
+    {
+        if (storageResult.ExistingFileId.HasValue)
+        {
+            var existing = await dbContext.DocumentFiles.FirstOrDefaultAsync(f => f.Id == storageResult.ExistingFileId.Value, cancellationToken);
+            if (existing is not null)
+            {
+                return existing;
+            }
+        }
+
+        var documentFile = new DocumentFile
+        {
+            FileName = file.FileName,
+            ContentType = file.ContentType,
+            Size = storageResult.Size,
+            Hash = storageResult.Hash,
+            StoragePath = storageResult.StoragePath,
+            IsEncrypted = isEncrypted
+        };
+
+        dbContext.DocumentFiles.Add(documentFile);
+        return documentFile;
+    }
+
+    private bool IsAdminOrManager()
+    {
+        return string.Equals(userContext.Role, UserRole.Admin.ToString(), StringComparison.OrdinalIgnoreCase)
+            || string.Equals(userContext.Role, UserRole.Administrator.ToString(), StringComparison.OrdinalIgnoreCase)
+            || string.Equals(userContext.Role, UserRole.Manager.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool CanAccessDocumentFile(Document document)
+    {
+        if (IsAdminOrManager())
+        {
+            return true;
+        }
+
+        if (document.Classification == DocumentClassification.Secret)
+        {
+            return false;
+        }
+
+        return document.Assignments.Any(a => a.UserId == userContext.UserId);
+    }
+
+    private bool CanAccessDocumentAssignments(Document document)
+    {
+        if (IsAdminOrManager())
+        {
+            return true;
+        }
+
+        return document.Assignments.Any(a => a.UserId == userContext.UserId);
     }
 }

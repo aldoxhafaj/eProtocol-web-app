@@ -1,4 +1,5 @@
 using System.Text;
+using eProtocol.Application.Abstractions;
 using eProtocol.Application;
 using eProtocol.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -27,6 +28,27 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidIssuer = jwtSection["Issuer"],
             ValidAudience = jwtSection["Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSection["Key"]!))
+        };
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = context =>
+            {
+                var authHeader = context.Request.Headers.Authorization.ToString();
+                var token = authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+                    ? authHeader["Bearer ".Length..].Trim()
+                    : authHeader.Trim();
+
+                if (!string.IsNullOrWhiteSpace(token))
+                {
+                    var blacklist = context.HttpContext.RequestServices.GetRequiredService<ITokenBlacklist>();
+                    if (blacklist.IsBlacklisted(token))
+                    {
+                        context.Fail("Token has been revoked.");
+                    }
+                }
+
+                return Task.CompletedTask;
+            }
         };
     });
 builder.Services.AddAuthorization();

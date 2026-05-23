@@ -1,4 +1,5 @@
 using eProtocol.Domain.Enums;
+using Microsoft.AspNetCore.Http;
 
 namespace eProtocol.Application.Documents;
 
@@ -35,6 +36,14 @@ public record CreateDocumentRequest(
     Guid? InstitutionId,
     DateTimeOffset? Deadline);
 
+public record UpdateDocumentRequest(
+    string? Title,
+    string? Description,
+    DocumentClassification? Classification,
+    DocumentType? Type,
+    DocumentPriority? Priority,
+    DateTimeOffset? Deadline);
+
 public record AssignDocumentRequest(Guid UserId, DateTimeOffset? Deadline);
 
 public record DocumentSearchRequest(
@@ -45,3 +54,5 @@ public record DocumentSearchRequest(
     DateTimeOffset? To,
     int Page = 1,
     int PageSize = 20);
+
+public record DocumentFileDownloadDto(Stream Content, string ContentType, string FileName);

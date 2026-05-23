@@ -2,7 +2,9 @@ namespace eProtocol.Domain.Enums;
 
 public enum DocumentType
 {
-    IncomingExternal = 1,
-    OutgoingExternal = 2,
-    Internal = 3
+    Incoming = 1,
+    Outgoing = 2,
+    Internal = 3,
+    IncomingExternal = Incoming,
+    OutgoingExternal = Outgoing
 }

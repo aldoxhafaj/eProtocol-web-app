@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using eProtocol.Application.Abstractions;
 using eProtocol.Infrastructure.Options;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace eProtocol.Infrastructure.Services;
@@ -24,12 +25,13 @@ public sealed class LocalFileStorage(IOptions<FileStorageOptions> options, IAppl
         ms.Position = 0;
 
         // Deduplication: check if file with same hash already exists
-        var existing = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
-            .FirstOrDefaultAsync(dbContext.DocumentFiles, f => f.Hash == hash, cancellationToken);
+        var existing = await dbContext.DocumentFiles
+            .AsNoTracking()
+            .FirstOrDefaultAsync(f => f.Hash == hash && f.IsEncrypted == request.Encrypt, cancellationToken);
 
         if (existing is not null)
         {
-            return new FileStorageResult(existing.StoragePath, hash, ms.Length);
+            return new FileStorageResult(existing.Id, existing.StoragePath, hash, ms.Length);
         }
 
         var fileName = $"{Guid.NewGuid():N}_{Path.GetFileName(request.FileName)}";
@@ -47,7 +49,7 @@ public sealed class LocalFileStorage(IOptions<FileStorageOptions> options, IAppl
             await ms.CopyToAsync(output, cancellationToken);
         }
 
-        return new FileStorageResult(relativePath, hash, ms.Length);
+        return new FileStorageResult(null, relativePath, hash, ms.Length);
     }
 
     public Task<Stream> OpenReadAsync(string storagePath, bool isEncrypted, CancellationToken cancellationToken = default)

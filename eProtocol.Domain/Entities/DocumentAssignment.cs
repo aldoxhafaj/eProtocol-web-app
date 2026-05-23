@@ -1,4 +1,5 @@
 using eProtocol.Domain.Common;
+using eProtocol.Domain.Enums;
 
 namespace eProtocol.Domain.Entities;
 
@@ -14,4 +15,7 @@ public class DocumentAssignment : BaseEntity
     public DateTimeOffset? CompletedAt { get; set; }
     public Guid AssignedById { get; set; }
     public User AssignedBy { get; set; } = null!;
+    public AssignmentStatus Status { get; set; } = AssignmentStatus.Pending;
+    public string? CancelledReason { get; set; }
+    public ICollection<AssignmentNote> Notes { get; set; } = new List<AssignmentNote>();
 }

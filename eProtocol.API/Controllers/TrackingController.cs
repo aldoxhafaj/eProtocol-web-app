@@ -17,7 +17,7 @@ public sealed class TrackingController(ITrackingService trackingService) : Contr
     }
 
     [HttpPost("{id:guid}/reassign")]
-    [Authorize(Roles = "Administrator,Manager")]
+    [Authorize(Roles = "Admin,Manager")]
     public async Task<IActionResult> Reassign(Guid id, [FromBody] ReassignRequest request, CancellationToken cancellationToken)
     {
         try
@@ -32,7 +32,7 @@ public sealed class TrackingController(ITrackingService trackingService) : Contr
     }
 
     [HttpPut("{id:guid}/deadline")]
-    [Authorize(Roles = "Administrator,Manager")]
+    [Authorize(Roles = "Admin,Manager")]
     public async Task<IActionResult> UpdateDeadline(Guid id, [FromBody] UpdateDeadlineRequest request, CancellationToken cancellationToken)
     {
         try
@@ -61,7 +61,7 @@ public sealed class TrackingController(ITrackingService trackingService) : Contr
     }
 
     [HttpPost("{id:guid}/cancel")]
-    [Authorize(Roles = "Administrator,Manager")]
+    [Authorize(Roles = "Admin,Manager")]
     public async Task<IActionResult> Cancel(Guid id, [FromBody] CancelAssignmentRequest request, CancellationToken cancellationToken)
     {
         try

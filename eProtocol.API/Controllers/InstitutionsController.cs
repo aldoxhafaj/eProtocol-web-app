@@ -24,7 +24,7 @@ public sealed class InstitutionsController(IInstitutionService institutionServic
     }
 
     [HttpPost]
-    [Authorize(Roles = "Administrator")]
+    [Authorize(Roles = "Admin")]
     public async Task<ActionResult<InstitutionDto>> Create([FromBody] CreateInstitutionRequest request, CancellationToken cancellationToken)
     {
         var institution = await institutionService.CreateAsync(request, cancellationToken);
@@ -32,7 +32,7 @@ public sealed class InstitutionsController(IInstitutionService institutionServic
     }
 
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "Administrator")]
+    [Authorize(Roles = "Admin")]
     public async Task<ActionResult<InstitutionDto>> Update(Guid id, [FromBody] UpdateInstitutionRequest request, CancellationToken cancellationToken)
     {
         try
@@ -47,7 +47,7 @@ public sealed class InstitutionsController(IInstitutionService institutionServic
     }
 
     [HttpDelete("{id:guid}")]
-    [Authorize(Roles = "Administrator")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
         await institutionService.DeleteAsync(id, cancellationToken);

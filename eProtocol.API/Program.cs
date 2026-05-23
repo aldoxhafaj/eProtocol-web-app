@@ -28,8 +28,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateIssuerSigningKey = true,
             ValidIssuer = jwtSection["Issuer"],
             ValidAudience = jwtSection["Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSection["Key"]!))
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSection["Key"]!)),
+            NameClaimType = System.Security.Claims.ClaimTypes.NameIdentifier
         };
+        options.MapInboundClaims = false;
         options.Events = new JwtBearerEvents
         {
             OnTokenValidated = context =>

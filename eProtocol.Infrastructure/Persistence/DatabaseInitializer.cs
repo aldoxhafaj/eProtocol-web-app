@@ -2,8 +2,6 @@ using eProtocol.Application.Abstractions;
 using eProtocol.Domain.Entities;
 using eProtocol.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace eProtocol.Infrastructure.Persistence;
 
@@ -11,17 +9,7 @@ public sealed class DatabaseInitializer(ApplicationDbContext dbContext, IPasswor
 {
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
-        var migrations = dbContext.Database.GetService<IMigrationsAssembly>();
-        if (migrations.Migrations.Count > 0)
-        {
-            await dbContext.Database.MigrateAsync(cancellationToken);
-        }
-        else
-        {
-            // When there are no migrations, recreate the database to ensure schema matches the model.
-            await dbContext.Database.EnsureDeletedAsync(cancellationToken);
-            await dbContext.Database.EnsureCreatedAsync(cancellationToken);
-        }
+        await dbContext.Database.MigrateAsync(cancellationToken);
 
         var hasChanges = false;
 
@@ -44,7 +32,7 @@ public sealed class DatabaseInitializer(ApplicationDbContext dbContext, IPasswor
             {
                 UserName = "admin",
                 Email = "admin@eprotocol.local",
-                Role = UserRole.Administrator,
+                Role = UserRole.Admin,
                 PasswordHash = passwordHasher.Hash("Admin123!"),
                 IsActive = true
             });

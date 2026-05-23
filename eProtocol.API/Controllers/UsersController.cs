@@ -6,7 +6,7 @@ namespace eProtocol.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Administrator")]
+[Authorize(Roles = "Admin")]
 public sealed class UsersController(IUserService userService) : ControllerBase
 {
     [HttpGet]

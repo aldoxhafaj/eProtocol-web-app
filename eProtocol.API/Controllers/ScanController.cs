@@ -7,7 +7,7 @@ namespace eProtocol.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Administrator,Manager")]
+[Authorize(Roles = "Admin,Manager,Employee")]
 public sealed class ScanController(IScannerService scannerService, IDocumentService documentService) : ControllerBase
 {
     [HttpPost]

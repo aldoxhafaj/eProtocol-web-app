@@ -25,7 +25,7 @@ public sealed class DocumentsController(IDocumentService documentService, IDocum
     }
 
     [HttpPost]
-    [Authorize(Roles = "Administrator,Manager")]
+    [Authorize(Roles = "Admin,Manager,Employee")]
     public async Task<ActionResult<DocumentDto>> Create([FromForm] CreateDocumentRequest request, IFormFile file, CancellationToken cancellationToken)
     {
         if (file is null || file.Length == 0)
@@ -48,7 +48,7 @@ public sealed class DocumentsController(IDocumentService documentService, IDocum
     }
 
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "Administrator,Manager")]
+    [Authorize(Roles = "Admin,Manager,Employee")]
     public async Task<ActionResult<DocumentDto>> Update(Guid id, [FromForm] UpdateDocumentRequest request, IFormFile? file, CancellationToken cancellationToken)
     {
         try
@@ -82,7 +82,7 @@ public sealed class DocumentsController(IDocumentService documentService, IDocum
     }
 
     [HttpPost("{id:guid}/assignments")]
-    [Authorize(Roles = "Administrator,Manager")]
+    [Authorize(Roles = "Admin,Manager")]
     public async Task<IActionResult> Assign(Guid id, [FromBody] AssignDocumentRequest request, CancellationToken cancellationToken)
     {
         try
@@ -104,7 +104,7 @@ public sealed class DocumentsController(IDocumentService documentService, IDocum
     }
 
     [HttpDelete("{id:guid}/assignments/{assignmentId:guid}")]
-    [Authorize(Roles = "Administrator,Manager")]
+    [Authorize(Roles = "Admin,Manager")]
     public async Task<IActionResult> RemoveAssignment(Guid id, Guid assignmentId, CancellationToken cancellationToken)
     {
         var removed = await documentService.RemoveAssignmentAsync(id, assignmentId, cancellationToken);
@@ -133,7 +133,7 @@ public sealed class DocumentsController(IDocumentService documentService, IDocum
     }
 
     [HttpDelete("{id:guid}")]
-    [Authorize(Roles = "Administrator,Manager,Employee")]
+    [Authorize(Roles = "Admin,Manager,Employee")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
         var result = await deletionPolicy.EvaluateAsync(id, cancellationToken);
@@ -153,7 +153,7 @@ public sealed class DocumentsController(IDocumentService documentService, IDocum
     }
 
     [HttpPost("{id:guid}/archive")]
-    [Authorize(Roles = "Administrator,Manager")]
+    [Authorize(Roles = "Admin,Manager")]
     public async Task<IActionResult> Archive(Guid id, CancellationToken cancellationToken)
     {
         try
@@ -168,7 +168,7 @@ public sealed class DocumentsController(IDocumentService documentService, IDocum
     }
 
     [HttpPost("{id:guid}/unarchive")]
-    [Authorize(Roles = "Administrator,Manager")]
+    [Authorize(Roles = "Admin,Manager")]
     public async Task<IActionResult> Unarchive(Guid id, CancellationToken cancellationToken)
     {
         try

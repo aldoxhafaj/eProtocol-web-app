@@ -30,8 +30,8 @@ public class DocumentDeletionPolicy(
 
         var role = Enum.Parse<UserRole>(userContext.Role, true);
 
-        // Administrator can delete anything unconditionally
-        if (role == UserRole.Administrator || role == UserRole.Admin)
+        // Admin can delete anything unconditionally
+        if (role == UserRole.Admin || role == UserRole.Admin)
             return new DeletionResult(true, 200, null);
 
         // Rule 4: Cannot delete a document with protocol number that is incoming/outgoing (official record)
@@ -71,7 +71,7 @@ public class DocumentDeletionPolicy(
 
         var role = Enum.Parse<UserRole>(userContext.Role, true);
 
-        if (role == UserRole.Administrator || role == UserRole.Admin)
+        if (role == UserRole.Admin || role == UserRole.Admin)
         {
             // Hard delete for admin
             var otherReferences = await dbContext.Documents

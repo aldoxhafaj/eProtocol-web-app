@@ -1,5 +1,4 @@
 using AutoMapper;
-using AutoMapper;
 using eProtocol.Application.Abstractions;
 using eProtocol.Domain.Entities;
 using eProtocol.Domain.Enums;
@@ -18,6 +17,27 @@ public class DocumentService(
 {
     public async Task<DocumentDto> CreateAsync(CreateDocumentRequest request, IFormFile file, CancellationToken cancellationToken = default)
     {
+        var currentUserId = userContext.UserId;
+        if (currentUserId == Guid.Empty)
+        {
+            throw new UnauthorizedAccessException("Unable to identify the current user.");
+        }
+
+        var userExists = await dbContext.Users.AnyAsync(u => u.Id == currentUserId, cancellationToken);
+        if (!userExists)
+        {
+            throw new UnauthorizedAccessException("The current user does not exist in the system.");
+        }
+
+        if (request.InstitutionId.HasValue)
+        {
+            var institutionExists = await dbContext.Institutions.AnyAsync(i => i.Id == request.InstitutionId.Value, cancellationToken);
+            if (!institutionExists)
+            {
+                throw new InvalidOperationException("The specified institution does not exist.");
+            }
+        }
+
         var (number, year) = await protocolNumberService.NextAsync(cancellationToken);
 
         await using var fileStream = file.OpenReadStream();
@@ -37,7 +57,7 @@ public class DocumentService(
             ProtocolYear = year,
             InstitutionId = request.InstitutionId,
             Deadline = request.Deadline,
-            CreatedById = userContext.UserId,
+            CreatedById = currentUserId,
             FileId = documentFile.Id
         };
 
@@ -46,7 +66,7 @@ public class DocumentService(
         {
             Document = document,
             Action = "Created",
-            PerformedById = userContext.UserId
+            PerformedById = currentUserId
         });
 
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -391,7 +411,7 @@ public class DocumentService(
     private bool IsAdminOrManager()
     {
         return string.Equals(userContext.Role, UserRole.Admin.ToString(), StringComparison.OrdinalIgnoreCase)
-            || string.Equals(userContext.Role, UserRole.Administrator.ToString(), StringComparison.OrdinalIgnoreCase)
+            || string.Equals(userContext.Role, UserRole.Admin.ToString(), StringComparison.OrdinalIgnoreCase)
             || string.Equals(userContext.Role, UserRole.Manager.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 

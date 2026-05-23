@@ -3,6 +3,7 @@ using AutoMapper;
 using eProtocol.Application.Auth;
 using eProtocol.Application.Documents;
 using eProtocol.Application.Institutions;
+using eProtocol.Application.Mapping;
 using eProtocol.Application.Notifications;
 using eProtocol.Application.Reports;
 using eProtocol.Application.Tracking;
@@ -15,7 +16,10 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
-        services.AddAutoMapper(Assembly.GetExecutingAssembly());
+        services.AddAutoMapper(cfg =>
+        {
+            cfg.AddProfile<MappingProfile>();
+        });
 
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IUserService, UserService>();

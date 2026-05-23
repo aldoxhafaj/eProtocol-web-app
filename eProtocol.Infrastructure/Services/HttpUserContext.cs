@@ -20,7 +20,7 @@ public sealed class HttpUserContext(IHttpContextAccessor httpContextAccessor) : 
         get
         {
             var role = httpContextAccessor.HttpContext?.User?.FindFirst(ClaimTypes.Role)?.Value;
-            return string.IsNullOrWhiteSpace(role) ? "Administrator" : role;
+            return string.IsNullOrWhiteSpace(role) ? "Employee" : role;
         }
     }
 }

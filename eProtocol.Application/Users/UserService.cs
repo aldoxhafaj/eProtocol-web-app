@@ -53,14 +53,14 @@ public class UserService(IApplicationDbContext dbContext, IPasswordHasher passwo
 
     public async Task<IReadOnlyList<UserDto>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        var users = await dbContext.Users.AsNoTracking().ToListAsync(cancellationToken);
+        var users = await dbContext.Users.AsNoTracking().Where(u => u.IsActive).ToListAsync(cancellationToken);
         return users.Select(mapper.Map<UserDto>).ToList();
     }
 
     public async Task<IReadOnlyList<UserDto>> GetByRoleAsync(UserRole role, CancellationToken cancellationToken = default)
     {
         var users = await dbContext.Users.AsNoTracking()
-            .Where(u => u.Role == role)
+            .Where(u => u.Role == role && u.IsActive)
             .OrderBy(u => u.FullName)
             .ToListAsync(cancellationToken);
         return users.Select(mapper.Map<UserDto>).ToList();

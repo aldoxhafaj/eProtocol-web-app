@@ -37,7 +37,7 @@ public class InstitutionService(IApplicationDbContext dbContext, IMapper mapper)
 
     public async Task<IReadOnlyList<InstitutionDto>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        var institutions = await dbContext.Institutions.AsNoTracking().ToListAsync(cancellationToken);
+        var institutions = await dbContext.Institutions.AsNoTracking().Where(i => i.IsActive).ToListAsync(cancellationToken);
         return institutions.Select(mapper.Map<InstitutionDto>).ToList();
     }
 

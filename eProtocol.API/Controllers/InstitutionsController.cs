@@ -24,6 +24,7 @@ public sealed class InstitutionsController(IInstitutionService institutionServic
     }
 
     [HttpPost]
+    [Authorize(Roles = "Administrator")]
     public async Task<ActionResult<InstitutionDto>> Create([FromBody] CreateInstitutionRequest request, CancellationToken cancellationToken)
     {
         var institution = await institutionService.CreateAsync(request, cancellationToken);
@@ -31,13 +32,22 @@ public sealed class InstitutionsController(IInstitutionService institutionServic
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Roles = "Administrator")]
     public async Task<ActionResult<InstitutionDto>> Update(Guid id, [FromBody] UpdateInstitutionRequest request, CancellationToken cancellationToken)
     {
-        var institution = await institutionService.UpdateAsync(id, request, cancellationToken);
-        return Ok(institution);
+        try
+        {
+            var institution = await institutionService.UpdateAsync(id, request, cancellationToken);
+            return Ok(institution);
+        }
+        catch (InvalidOperationException)
+        {
+            return NotFound();
+        }
     }
 
     [HttpDelete("{id:guid}")]
+    [Authorize(Roles = "Administrator")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
         await institutionService.DeleteAsync(id, cancellationToken);

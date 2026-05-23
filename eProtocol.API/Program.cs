@@ -1,4 +1,5 @@
 using System.Text;
+using eProtocol.API.Middleware;
 using eProtocol.Application.Abstractions;
 using eProtocol.Application;
 using eProtocol.Infrastructure;
@@ -82,6 +83,8 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 app.UseCors("Frontend");
+
+app.UseMiddleware<GlobalExceptionMiddleware>();
 
 app.UseAuthentication();
 app.UseAuthorization();

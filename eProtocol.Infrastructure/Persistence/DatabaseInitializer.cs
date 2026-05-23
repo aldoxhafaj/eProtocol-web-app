@@ -18,6 +18,8 @@ public sealed class DatabaseInitializer(ApplicationDbContext dbContext, IPasswor
         }
         else
         {
+            // When there are no migrations, recreate the database to ensure schema matches the model.
+            await dbContext.Database.EnsureDeletedAsync(cancellationToken);
             await dbContext.Database.EnsureCreatedAsync(cancellationToken);
         }
 

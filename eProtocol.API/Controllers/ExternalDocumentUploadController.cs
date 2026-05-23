@@ -1,5 +1,5 @@
 using eProtocol.Application.Documents;
-using eProtocol.Domain.Enums;
+using eProtocol.Application.Documents;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 
@@ -33,28 +33,16 @@ public sealed class ApiKeyAuthAttribute : Attribute, IAuthorizationFilter
 [ApiKeyAuth]
 public sealed class ExternalDocumentUploadController(IDocumentService documentService) : ControllerBase
 {
-    private static readonly HashSet<string> AllowedContentTypes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "application/pdf",
-        "image/png",
-        "image/jpeg",
-        "image/tiff",
-        "application/msword",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    };
-
-    private const long MaxFileSize = 50 * 1024 * 1024; // 50 MB
-
     [HttpPost("upload")]
     public async Task<ActionResult<DocumentDto>> Upload([FromForm] CreateDocumentRequest request, IFormFile file, CancellationToken cancellationToken)
     {
         if (file is null || file.Length == 0)
             return BadRequest("File is required.");
 
-        if (file.Length > MaxFileSize)
-            return BadRequest($"File size exceeds maximum of {MaxFileSize / (1024 * 1024)} MB.");
+        if (FileValidation.ExceedsMaxSize(file.Length))
+            return BadRequest($"File size exceeds maximum of {FileValidation.MaxFileSize / (1024 * 1024)} MB.");
 
-        if (!AllowedContentTypes.Contains(file.ContentType))
+        if (!FileValidation.IsValidContentType(file.ContentType))
             return BadRequest("File type is not allowed.");
 
         var document = await documentService.CreateAsync(request, file, cancellationToken);

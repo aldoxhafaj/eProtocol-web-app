@@ -1,4 +1,5 @@
 using eProtocol.Application.Documents;
+using eProtocol.Application.Documents;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -27,9 +28,19 @@ public sealed class DocumentsController(IDocumentService documentService, IDocum
     [Authorize(Roles = "Administrator,Manager")]
     public async Task<ActionResult<DocumentDto>> Create([FromForm] CreateDocumentRequest request, IFormFile file, CancellationToken cancellationToken)
     {
-        if (file is null)
+        if (file is null || file.Length == 0)
         {
             return BadRequest("File is required.");
+        }
+
+        if (FileValidation.ExceedsMaxSize(file.Length))
+        {
+            return BadRequest($"File size exceeds maximum of {FileValidation.MaxFileSize / (1024 * 1024)} MB.");
+        }
+
+        if (!FileValidation.IsValidContentType(file.ContentType))
+        {
+            return BadRequest("File type is not allowed.");
         }
 
         var document = await documentService.CreateAsync(request, file, cancellationToken);
@@ -74,8 +85,15 @@ public sealed class DocumentsController(IDocumentService documentService, IDocum
     [Authorize(Roles = "Administrator,Manager")]
     public async Task<IActionResult> Assign(Guid id, [FromBody] AssignDocumentRequest request, CancellationToken cancellationToken)
     {
-        await documentService.AssignAsync(id, request, cancellationToken);
-        return NoContent();
+        try
+        {
+            await documentService.AssignAsync(id, request, cancellationToken);
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return ex.Message.Contains("not found", StringComparison.OrdinalIgnoreCase) ? NotFound() : Conflict(ex.Message);
+        }
     }
 
     [HttpGet("{id:guid}/assignments")]
@@ -103,8 +121,15 @@ public sealed class DocumentsController(IDocumentService documentService, IDocum
     [HttpPost("assignments/{assignmentId:guid}/complete")]
     public async Task<IActionResult> CompleteAssignment(Guid assignmentId, CancellationToken cancellationToken)
     {
-        await documentService.CompleteAssignmentAsync(assignmentId, cancellationToken);
-        return NoContent();
+        try
+        {
+            await documentService.CompleteAssignmentAsync(assignmentId, cancellationToken);
+            return NoContent();
+        }
+        catch (InvalidOperationException)
+        {
+            return NotFound();
+        }
     }
 
     [HttpDelete("{id:guid}")]
@@ -131,8 +156,15 @@ public sealed class DocumentsController(IDocumentService documentService, IDocum
     [Authorize(Roles = "Administrator,Manager")]
     public async Task<IActionResult> Archive(Guid id, CancellationToken cancellationToken)
     {
-        await documentService.ArchiveAsync(id, cancellationToken);
-        return NoContent();
+        try
+        {
+            await documentService.ArchiveAsync(id, cancellationToken);
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return ex.Message.Contains("not found", StringComparison.OrdinalIgnoreCase) ? NotFound() : Conflict(ex.Message);
+        }
     }
 
     [HttpPost("{id:guid}/unarchive")]

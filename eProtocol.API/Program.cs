@@ -1,4 +1,6 @@
 using System.Text;
+using eProtocol.API.Middleware;
+using eProtocol.Application.Abstractions;
 using eProtocol.Application;
 using eProtocol.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -26,7 +28,30 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateIssuerSigningKey = true,
             ValidIssuer = jwtSection["Issuer"],
             ValidAudience = jwtSection["Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSection["Key"]!))
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSection["Key"]!)),
+            NameClaimType = System.Security.Claims.ClaimTypes.NameIdentifier
+        };
+        options.MapInboundClaims = false;
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = context =>
+            {
+                var authHeader = context.Request.Headers.Authorization.ToString();
+                var token = authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+                    ? authHeader["Bearer ".Length..].Trim()
+                    : authHeader.Trim();
+
+                if (!string.IsNullOrWhiteSpace(token))
+                {
+                    var blacklist = context.HttpContext.RequestServices.GetRequiredService<ITokenBlacklist>();
+                    if (blacklist.IsBlacklisted(token))
+                    {
+                        context.Fail("Token has been revoked.");
+                    }
+                }
+
+                return Task.CompletedTask;
+            }
         };
     });
 builder.Services.AddAuthorization();
@@ -60,6 +85,8 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 app.UseCors("Frontend");
+
+app.UseMiddleware<GlobalExceptionMiddleware>();
 
 app.UseAuthentication();
 app.UseAuthorization();

@@ -12,6 +12,7 @@ public class ReportService(IApplicationDbContext dbContext, IMapper mapper) : IR
     {
         var query = dbContext.Documents.AsNoTracking()
             .Include(d => d.Assignments).ThenInclude(a => a.User)
+            .Where(d => !d.IsDeleted)
             .Where(d => d.CreatedAt >= request.From && d.CreatedAt <= request.To);
 
         if (request.Type.HasValue)
@@ -50,7 +51,7 @@ public class ReportService(IApplicationDbContext dbContext, IMapper mapper) : IR
 
     public async Task<GeneralStatisticsDto> GetStatisticsAsync(StatisticsRequest request, CancellationToken cancellationToken = default)
     {
-        var query = dbContext.Documents.AsNoTracking();
+        var query = dbContext.Documents.AsNoTracking().Where(d => !d.IsDeleted);
         if (request.From.HasValue)
             query = query.Where(d => d.CreatedAt >= request.From.Value);
         if (request.To.HasValue)
@@ -71,6 +72,7 @@ public class ReportService(IApplicationDbContext dbContext, IMapper mapper) : IR
     {
         var docs = await dbContext.Documents.AsNoTracking()
             .Include(d => d.Assignments).ThenInclude(a => a.User)
+            .Where(d => !d.IsDeleted)
             .OrderByDescending(d => d.Priority)
             .ThenByDescending(d => d.CreatedAt)
             .ToListAsync(cancellationToken);

@@ -19,7 +19,7 @@ public sealed class DocumentConfiguration : IEntityTypeConfiguration<Document>
         builder.HasOne(d => d.File)
             .WithMany()
             .HasForeignKey(d => d.FileId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(d => d.CreatedBy)
             .WithMany()

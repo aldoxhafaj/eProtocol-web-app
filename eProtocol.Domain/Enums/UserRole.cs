@@ -2,7 +2,7 @@ namespace eProtocol.Domain.Enums;
 
 public enum UserRole
 {
-    Administrator = 1,
+    Admin = 1,
     Manager = 2,
-    Employee = 3
+    Employee = 3,
 }

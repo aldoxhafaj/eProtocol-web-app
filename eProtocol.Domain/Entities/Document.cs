@@ -20,6 +20,9 @@ public class Document : BaseEntity
     public DocumentFile File { get; set; } = null!;
     public Guid CreatedById { get; set; }
     public User CreatedBy { get; set; } = null!;
+    public bool IsDeleted { get; set; }
+    public DateTimeOffset? DeletedAt { get; set; }
+    public Guid? DeletedById { get; set; }
     public ICollection<DocumentAssignment> Assignments { get; set; } = new List<DocumentAssignment>();
     public ICollection<DocumentAudit> Audits { get; set; } = new List<DocumentAudit>();
 }

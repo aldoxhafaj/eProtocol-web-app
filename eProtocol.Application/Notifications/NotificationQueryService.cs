@@ -30,4 +30,23 @@ public class NotificationQueryService(IApplicationDbContext dbContext, IUserCont
         notification.IsRead = true;
         await dbContext.SaveChangesAsync(cancellationToken);
     }
+
+    public async Task MarkAllAsReadAsync(CancellationToken cancellationToken = default)
+    {
+        var notifications = await dbContext.Notifications
+            .Where(n => n.UserId == userContext.UserId && !n.IsRead)
+            .ToListAsync(cancellationToken);
+
+        if (notifications.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var notification in notifications)
+        {
+            notification.IsRead = true;
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
 }

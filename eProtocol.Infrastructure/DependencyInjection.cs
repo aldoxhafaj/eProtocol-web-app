@@ -27,6 +27,7 @@ public static class DependencyInjection
         services.AddScoped<INotificationService, NotificationStorageService>();
         services.AddScoped<IUserContext, HttpUserContext>();
         services.AddScoped<IScannerService, StubScannerService>();
+        services.AddSingleton<ITokenBlacklist, InMemoryTokenBlacklist>();
         services.AddHttpContextAccessor();
 
         return services;

@@ -6,10 +6,10 @@ namespace eProtocol.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[AllowAnonymous]
 public sealed class AuthController(IAuthService authService) : ControllerBase
 {
     [HttpPost("login")]
+    [AllowAnonymous]
     public async Task<ActionResult<AuthResponse>> Login([FromBody] AuthRequest request, CancellationToken cancellationToken)
     {
         try
@@ -20,6 +20,34 @@ public sealed class AuthController(IAuthService authService) : ControllerBase
         catch (UnauthorizedAccessException)
         {
             return Unauthorized();
+        }
+    }
+
+    [HttpPost("logout")]
+    [Authorize]
+    public async Task<IActionResult> Logout(CancellationToken cancellationToken)
+    {
+        var authHeader = Request.Headers.Authorization.ToString();
+        var token = authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+            ? authHeader["Bearer ".Length..].Trim()
+            : authHeader.Trim();
+
+        await authService.LogoutAsync(token, cancellationToken);
+        return Ok();
+    }
+
+    [HttpPost("change-password")]
+    [Authorize]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await authService.ChangePasswordAsync(request, cancellationToken);
+            return Ok();
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
         }
     }
 }

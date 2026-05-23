@@ -29,4 +29,11 @@ public sealed class NotificationsController(INotificationQueryService notificati
         await notificationService.MarkAsReadAsync(id, cancellationToken);
         return NoContent();
     }
+
+    [HttpPost("read-all")]
+    public async Task<IActionResult> MarkAllAsRead(CancellationToken cancellationToken)
+    {
+        await notificationService.MarkAllAsReadAsync(cancellationToken);
+        return Ok();
+    }
 }

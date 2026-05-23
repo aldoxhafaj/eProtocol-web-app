@@ -10,7 +10,8 @@ public sealed class HttpUserContext(IHttpContextAccessor httpContextAccessor) : 
     {
         get
         {
-            var userIdClaim = httpContextAccessor.HttpContext?.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userIdClaim = httpContextAccessor.HttpContext?.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? httpContextAccessor.HttpContext?.User?.FindFirst("sub")?.Value;
             return Guid.TryParse(userIdClaim, out var userId) ? userId : Guid.Empty;
         }
     }
@@ -19,8 +20,9 @@ public sealed class HttpUserContext(IHttpContextAccessor httpContextAccessor) : 
     {
         get
         {
-            var role = httpContextAccessor.HttpContext?.User?.FindFirst(ClaimTypes.Role)?.Value;
-            return string.IsNullOrWhiteSpace(role) ? "Administrator" : role;
+            var role = httpContextAccessor.HttpContext?.User?.FindFirst(ClaimTypes.Role)?.Value
+                ?? httpContextAccessor.HttpContext?.User?.FindFirst("role")?.Value;
+            return string.IsNullOrWhiteSpace(role) ? "Employee" : role;
         }
     }
 }

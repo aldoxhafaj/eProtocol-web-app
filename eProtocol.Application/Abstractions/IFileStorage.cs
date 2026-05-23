@@ -8,4 +8,4 @@ public interface IFileStorage
 
 public record FileStorageRequest(string FileName, string ContentType, Stream Content, bool Encrypt);
 
-public record FileStorageResult(string StoragePath, string Hash, long Size);
+public record FileStorageResult(Guid? ExistingFileId, string StoragePath, string Hash, long Size);

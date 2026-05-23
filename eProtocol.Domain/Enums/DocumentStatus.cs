@@ -2,9 +2,12 @@ namespace eProtocol.Domain.Enums;
 
 public enum DocumentStatus
 {
-    Draft = 1,
-    Registered = 2,
-    Assigned = 3,
-    Completed = 4,
-    Archived = 5
+    Pending = 1,
+    InProgress = 2,
+    Completed = 3,
+    Archived = 4,
+    Overdue = 5,
+    Draft = Pending,
+    Registered = Pending,
+    UnderReview = InProgress
 }

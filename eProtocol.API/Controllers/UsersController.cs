@@ -6,7 +6,7 @@ namespace eProtocol.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Administrator")]
+[Authorize(Roles = "Admin")]
 public sealed class UsersController(IUserService userService) : ControllerBase
 {
     [HttpGet]
@@ -26,15 +26,33 @@ public sealed class UsersController(IUserService userService) : ControllerBase
     [HttpPost]
     public async Task<ActionResult<UserDto>> Create([FromBody] CreateUserRequest request, CancellationToken cancellationToken)
     {
-        var user = await userService.CreateAsync(request, cancellationToken);
-        return CreatedAtAction(nameof(GetById), new { id = user.Id }, user);
+        try
+        {
+            var user = await userService.CreateAsync(request, cancellationToken);
+            return CreatedAtAction(nameof(GetById), new { id = user.Id }, user);
+        }
+        catch (ArgumentException ex)
+        {
+            return Conflict(ex.Message);
+        }
     }
 
     [HttpPut("{id:guid}")]
     public async Task<ActionResult<UserDto>> Update(Guid id, [FromBody] UpdateUserRequest request, CancellationToken cancellationToken)
     {
-        var user = await userService.UpdateAsync(id, request, cancellationToken);
-        return Ok(user);
+        try
+        {
+            var user = await userService.UpdateAsync(id, request, cancellationToken);
+            return Ok(user);
+        }
+        catch (ArgumentException ex)
+        {
+            return Conflict(ex.Message);
+        }
+        catch (InvalidOperationException)
+        {
+            return NotFound();
+        }
     }
 
     [HttpDelete("{id:guid}")]

@@ -19,6 +19,7 @@ public static class DependencyInjection
             options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
 
         services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<ApplicationDbContext>());
+        services.AddScoped<IDatabaseInitializer, DatabaseInitializer>();
         services.AddScoped<IPasswordHasher, Sha256PasswordHasher>();
         services.AddScoped<IJwtTokenService, SimpleJwtTokenService>();
         services.AddScoped<IFileStorage, LocalFileStorage>();

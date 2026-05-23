@@ -8,7 +8,10 @@ public class AuthService(IApplicationDbContext dbContext, IPasswordHasher passwo
 {
     public async Task<AuthResponse> AuthenticateAsync(AuthRequest request, CancellationToken cancellationToken = default)
     {
-        var user = await dbContext.Users.FirstOrDefaultAsync(u => u.UserName == request.UserName, cancellationToken);
+        var identifier = request.UserName.Trim().ToLower();
+        var user = await dbContext.Users.FirstOrDefaultAsync(
+            u => u.UserName.ToLower() == identifier || u.Email.ToLower() == identifier,
+            cancellationToken);
         if (user is null || !user.IsActive || !passwordHasher.Verify(user.PasswordHash, request.Password))
         {
             throw new UnauthorizedAccessException("Invalid credentials.");

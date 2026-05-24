@@ -69,6 +69,30 @@ public class DocumentService(
             PerformedById = currentUserId
         });
 
+        if (request.AssignedUserId.HasValue)
+        {
+            await ValidateAssigneeAsync(request.AssignedUserId.Value, cancellationToken);
+
+            var assignment = new DocumentAssignment
+            {
+                Document = document,
+                UserId = request.AssignedUserId.Value,
+                AssignedById = currentUserId,
+                Status = Domain.Enums.AssignmentStatus.Pending
+            };
+
+            dbContext.DocumentAssignments.Add(assignment);
+            document.Status = DocumentStatus.InProgress;
+
+            dbContext.DocumentAudits.Add(new DocumentAudit
+            {
+                Document = document,
+                Action = "Assigned",
+                PerformedById = currentUserId,
+                Notes = $"Assigned to {request.AssignedUserId.Value}"
+            });
+        }
+
         await dbContext.SaveChangesAsync(cancellationToken);
         return mapper.Map<DocumentDto>(document);
     }
@@ -124,6 +148,41 @@ public class DocumentService(
             document.FileId = documentFile.Id;
         }
 
+        if (request.AssignedUserId.HasValue)
+        {
+            await ValidateAssigneeAsync(request.AssignedUserId.Value, cancellationToken);
+
+            // Remove existing incomplete assignments before adding new one
+            var existingAssignments = document.Assignments.Where(a => !a.IsCompleted).ToList();
+            foreach (var existing in existingAssignments)
+            {
+                dbContext.DocumentAssignments.Remove(existing);
+            }
+
+            var assignment = new DocumentAssignment
+            {
+                DocumentId = document.Id,
+                UserId = request.AssignedUserId.Value,
+                AssignedById = userContext.UserId,
+                Status = Domain.Enums.AssignmentStatus.Pending
+            };
+
+            dbContext.DocumentAssignments.Add(assignment);
+
+            if (document.Status == DocumentStatus.Pending || document.Status == DocumentStatus.Completed)
+            {
+                document.Status = DocumentStatus.InProgress;
+            }
+
+            dbContext.DocumentAudits.Add(new DocumentAudit
+            {
+                DocumentId = document.Id,
+                Action = "Assigned",
+                PerformedById = userContext.UserId,
+                Notes = $"Assigned to {request.AssignedUserId.Value}"
+            });
+        }
+
         document.UpdatedAt = DateTimeOffset.UtcNow;
 
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -177,6 +236,7 @@ public class DocumentService(
         IQueryable<Document> query = dbContext.Documents
             .AsNoTracking()
             .Include(d => d.Assignments)
+                .ThenInclude(a => a.User)
             .Where(d => !d.IsDeleted);
 
         query = ApplyAccessControl(query);
@@ -208,7 +268,11 @@ public class DocumentService(
 
     public async Task<IReadOnlyList<DocumentDto>> SearchAsync(DocumentSearchRequest request, CancellationToken cancellationToken = default)
     {
-        var query = dbContext.Documents.AsNoTracking().Where(d => !d.IsDeleted);
+        IQueryable<Document> query = dbContext.Documents
+            .AsNoTracking()
+            .Include(d => d.Assignments)
+                .ThenInclude(a => a.User)
+            .Where(d => !d.IsDeleted);
 
         if (request.Type.HasValue)
         {
@@ -291,29 +355,70 @@ public class DocumentService(
         }
 
         return query.Where(d => d.Classification == DocumentClassification.Public ||
-                                (d.Classification == DocumentClassification.Restricted && d.Assignments.Any(a => a.UserId == userContext.UserId)));
+                                d.Assignments.Any(a => a.UserId == userContext.UserId));
     }
 
-    public async Task<IReadOnlyList<DocumentDto>> GetMyAssignmentsAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<MyAssignmentDto>> GetMyAssignmentsAsync(CancellationToken cancellationToken = default)
     {
-        var documents = await dbContext.Documents
+        var assignments = await dbContext.DocumentAssignments
             .AsNoTracking()
-            .Include(d => d.Assignments).ThenInclude(a => a.User)
-            .Where(d => d.Assignments.Any(a => a.UserId == userContext.UserId))
-            .OrderByDescending(d => d.CreatedAt)
+            .Include(a => a.Document)
+            .Where(a => a.UserId == userContext.UserId)
+            .OrderByDescending(a => a.AssignedAt)
             .ToListAsync(cancellationToken);
 
-        return documents.Select(mapper.Map<DocumentDto>).ToList();
+        return assignments.Select(a => new MyAssignmentDto(
+            a.Id,
+            a.DocumentId,
+            a.Document.Title,
+            a.Document.ProtocolNumber,
+            a.Document.ProtocolYear,
+            a.Document.Classification,
+            a.Document.Priority,
+            a.Status,
+            a.AssignedAt,
+            a.Deadline,
+            a.IsCompleted,
+            a.CompletedAt)).ToList();
     }
 
     public async Task CompleteAssignmentAsync(Guid assignmentId, CancellationToken cancellationToken = default)
     {
-        var assignment = await dbContext.DocumentAssignments.FirstOrDefaultAsync(a => a.Id == assignmentId, cancellationToken);
+        var currentRole = userContext.Role;
+        if (string.Equals(currentRole, UserRole.Admin.ToString(), StringComparison.OrdinalIgnoreCase))
+        {
+            throw new UnauthorizedAccessException("Admins cannot complete assignments.");
+        }
+
+        var assignment = await dbContext.DocumentAssignments
+            .Include(a => a.Document)
+                .ThenInclude(d => d.Assignments)
+            .FirstOrDefaultAsync(a => a.Id == assignmentId, cancellationToken);
+
         if (assignment is null)
             throw new InvalidOperationException("Assignment not found.");
 
+        if (assignment.UserId != userContext.UserId)
+            throw new UnauthorizedAccessException("You can only complete your own assignments.");
+
         assignment.IsCompleted = true;
         assignment.CompletedAt = DateTimeOffset.UtcNow;
+        assignment.Status = Domain.Enums.AssignmentStatus.Completed;
+
+        var allCompleted = assignment.Document.Assignments.All(a => a.Id == assignmentId || a.IsCompleted);
+        if (allCompleted)
+        {
+            assignment.Document.Status = DocumentStatus.Completed;
+            assignment.Document.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+
+        dbContext.DocumentAudits.Add(new DocumentAudit
+        {
+            DocumentId = assignment.DocumentId,
+            Action = "Assignment Completed",
+            PerformedById = userContext.UserId
+        });
+
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
@@ -321,16 +426,31 @@ public class DocumentService(
     {
         var document = await dbContext.Documents
             .Include(d => d.File)
-            .FirstOrDefaultAsync(d => d.Id == id && !d.IsDeleted, cancellationToken);
+            .FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
         if (document is null)
         {
             return false;
         }
 
-        // Soft-delete by default (hard-delete via DeletionPolicy for admins)
-        document.IsDeleted = true;
-        document.DeletedAt = DateTimeOffset.UtcNow;
-        document.DeletedById = userContext.UserId;
+        // Clear notification references
+        var notifications = await dbContext.Notifications
+            .Where(n => n.DocumentId == id)
+            .ToListAsync(cancellationToken);
+        foreach (var notification in notifications)
+        {
+            notification.DocumentId = null;
+        }
+
+        // Hard delete - cascades handle Assignments, Audits, AssignmentNotes
+        var otherReferences = await dbContext.Documents
+            .CountAsync(d => d.FileId == document.FileId && d.Id != document.Id, cancellationToken);
+
+        dbContext.Documents.Remove(document);
+        if (otherReferences == 0)
+        {
+            dbContext.DocumentFiles.Remove(document.File);
+        }
+
         await dbContext.SaveChangesAsync(cancellationToken);
         return true;
     }
@@ -408,6 +528,36 @@ public class DocumentService(
         return documentFile;
     }
 
+    private async Task ValidateAssigneeAsync(Guid assigneeId, CancellationToken cancellationToken)
+    {
+        var assignee = await dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == assigneeId && u.IsActive, cancellationToken);
+        if (assignee is null)
+        {
+            throw new InvalidOperationException("The specified assignee does not exist or is inactive.");
+        }
+
+        if (IsAdmin())
+        {
+            // Admin can assign to Managers and Employees
+            if (assignee.Role != UserRole.Manager && assignee.Role != UserRole.Employee)
+            {
+                throw new InvalidOperationException("Admin can only assign documents to managers or employees.");
+            }
+        }
+        else if (string.Equals(userContext.Role, UserRole.Manager.ToString(), StringComparison.OrdinalIgnoreCase))
+        {
+            // Manager can only assign to Employees
+            if (assignee.Role != UserRole.Employee)
+            {
+                throw new InvalidOperationException("Manager can only assign documents to employees.");
+            }
+        }
+        else
+        {
+            throw new UnauthorizedAccessException("You do not have permission to assign documents.");
+        }
+    }
+
     private bool IsAdminOrManager()
     {
         return string.Equals(userContext.Role, UserRole.Admin.ToString(), StringComparison.OrdinalIgnoreCase)
@@ -415,19 +565,35 @@ public class DocumentService(
             || string.Equals(userContext.Role, UserRole.Manager.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 
+    private bool IsAdmin()
+    {
+        return string.Equals(userContext.Role, UserRole.Admin.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
     private bool CanAccessDocumentFile(Document document)
     {
-        if (IsAdminOrManager())
+        if (IsAdmin())
         {
             return true;
         }
 
-        if (document.Classification == DocumentClassification.Secret)
+        if (document.Classification == DocumentClassification.Public)
         {
-            return false;
+            return true;
         }
 
-        return document.Assignments.Any(a => a.UserId == userContext.UserId);
+        if (document.Classification == DocumentClassification.Restricted)
+        {
+            return document.Assignments.Any(a => a.UserId == userContext.UserId);
+        }
+
+        if (document.Classification == DocumentClassification.Secret)
+        {
+            return string.Equals(userContext.Role, UserRole.Manager.ToString(), StringComparison.OrdinalIgnoreCase)
+                && document.Assignments.Any(a => a.UserId == userContext.UserId);
+        }
+
+        return false;
     }
 
     private bool CanAccessDocumentAssignments(Document document)

@@ -7,7 +7,7 @@ namespace eProtocol.API.Controllers;
 
 [ApiController]
 [Route("api/managers")]
-[Authorize(Roles = "Manager")]
+[Authorize(Roles = "Admin,Manager")]
 public sealed class ManagersController(IUserService userService) : ControllerBase
 {
     [HttpGet("employees")]

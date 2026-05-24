@@ -1,4 +1,5 @@
 using eProtocol.Domain.Enums;
+using eProtocol.Domain.Enums;
 using Microsoft.AspNetCore.Http;
 
 namespace eProtocol.Application.Documents;
@@ -16,12 +17,28 @@ public record DocumentDto(
     Guid? InstitutionId,
     DateTimeOffset? Deadline,
     Guid FileId,
+    Guid? AssignedToId,
+    string? AssignedToName,
     IReadOnlyList<DocumentAssignmentDto>? Assignments);
 
 public record DocumentAssignmentDto(
     Guid Id,
     Guid UserId,
     string? UserName,
+    DateTimeOffset AssignedAt,
+    DateTimeOffset? Deadline,
+    bool IsCompleted,
+    DateTimeOffset? CompletedAt);
+
+public record MyAssignmentDto(
+    Guid AssignmentId,
+    Guid DocumentId,
+    string DocumentTitle,
+    int ProtocolNumber,
+    int ProtocolYear,
+    DocumentClassification Classification,
+    DocumentPriority Priority,
+    AssignmentStatus Status,
     DateTimeOffset AssignedAt,
     DateTimeOffset? Deadline,
     bool IsCompleted,
@@ -34,7 +51,8 @@ public record CreateDocumentRequest(
     DocumentType Type,
     DocumentPriority Priority,
     Guid? InstitutionId,
-    DateTimeOffset? Deadline);
+    DateTimeOffset? Deadline,
+    Guid? AssignedUserId = null);
 
 public record UpdateDocumentRequest(
     string? Title,
@@ -42,7 +60,8 @@ public record UpdateDocumentRequest(
     DocumentClassification? Classification,
     DocumentType? Type,
     DocumentPriority? Priority,
-    DateTimeOffset? Deadline);
+    DateTimeOffset? Deadline,
+    Guid? AssignedUserId = null);
 
 public record AssignDocumentRequest(Guid UserId, DateTimeOffset? Deadline);
 

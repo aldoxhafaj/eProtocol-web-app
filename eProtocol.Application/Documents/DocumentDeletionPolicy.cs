@@ -69,26 +69,24 @@ public class DocumentDeletionPolicy(
 
         if (document is null) return;
 
-        var role = Enum.Parse<UserRole>(userContext.Role, true);
+        // Clear notification references to avoid FK violation
+        var notifications = await dbContext.Notifications
+            .Where(n => n.DocumentId == document.Id)
+            .ToListAsync(cancellationToken);
 
-        if (role == UserRole.Admin || role == UserRole.Admin)
+        foreach (var notification in notifications)
         {
-            // Hard delete for admin
-            var otherReferences = await dbContext.Documents
-                .CountAsync(d => d.FileId == document.FileId && d.Id != document.Id, cancellationToken);
-
-            dbContext.Documents.Remove(document);
-            if (otherReferences == 0)
-            {
-                dbContext.DocumentFiles.Remove(document.File);
-            }
+            notification.DocumentId = null;
         }
-        else
+
+        // Hard delete - cascades will handle Assignments, Audits, and AssignmentNotes
+        var otherReferences = await dbContext.Documents
+            .CountAsync(d => d.FileId == document.FileId && d.Id != document.Id, cancellationToken);
+
+        dbContext.Documents.Remove(document);
+        if (otherReferences == 0)
         {
-            // Soft delete for non-admin
-            document.IsDeleted = true;
-            document.DeletedAt = DateTimeOffset.UtcNow;
-            document.DeletedById = userContext.UserId;
+            dbContext.DocumentFiles.Remove(document.File);
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);

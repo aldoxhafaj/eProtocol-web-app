@@ -58,7 +58,14 @@ public sealed class UsersController(IUserService userService) : ControllerBase
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
-        await userService.DeleteAsync(id, cancellationToken);
-        return NoContent();
+        try
+        {
+            await userService.DeleteAsync(id, cancellationToken);
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(ex.Message);
+        }
     }
 }

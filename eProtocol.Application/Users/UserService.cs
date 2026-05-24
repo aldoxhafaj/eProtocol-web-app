@@ -46,21 +46,36 @@ public class UserService(IApplicationDbContext dbContext, IPasswordHasher passwo
             return;
         }
 
-        user.IsActive = false;
-        user.UpdatedAt = DateTimeOffset.UtcNow;
+        // Check if user has any document relations that would prevent deletion
+        var hasCreatedDocuments = await dbContext.Documents.AnyAsync(d => d.CreatedById == id, cancellationToken);
+        var hasAssignments = await dbContext.DocumentAssignments.AnyAsync(a => a.UserId == id || a.AssignedById == id, cancellationToken);
+        var hasAudits = await dbContext.DocumentAudits.AnyAsync(a => a.PerformedById == id, cancellationToken);
+
+        if (hasCreatedDocuments || hasAssignments || hasAudits)
+        {
+            throw new InvalidOperationException("Cannot delete user because they have related documents, assignments, or audit records.");
+        }
+
+        // Remove notifications for this user
+        var notifications = await dbContext.Notifications
+            .Where(n => n.UserId == id)
+            .ToListAsync(cancellationToken);
+        dbContext.Notifications.RemoveRange(notifications);
+
+        dbContext.Users.Remove(user);
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<UserDto>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        var users = await dbContext.Users.AsNoTracking().Where(u => u.IsActive).ToListAsync(cancellationToken);
+        var users = await dbContext.Users.AsNoTracking().ToListAsync(cancellationToken);
         return users.Select(mapper.Map<UserDto>).ToList();
     }
 
     public async Task<IReadOnlyList<UserDto>> GetByRoleAsync(UserRole role, CancellationToken cancellationToken = default)
     {
         var users = await dbContext.Users.AsNoTracking()
-            .Where(u => u.Role == role && u.IsActive)
+            .Where(u => u.Role == role)
             .OrderBy(u => u.FullName)
             .ToListAsync(cancellationToken);
         return users.Select(mapper.Map<UserDto>).ToList();
@@ -149,8 +164,13 @@ public class UserService(IApplicationDbContext dbContext, IPasswordHasher passwo
             return false;
         }
 
-        user.IsActive = false;
-        user.UpdatedAt = DateTimeOffset.UtcNow;
+        // Remove notifications for this user
+        var notifications = await dbContext.Notifications
+            .Where(n => n.UserId == id)
+            .ToListAsync(cancellationToken);
+        dbContext.Notifications.RemoveRange(notifications);
+
+        dbContext.Users.Remove(user);
         await dbContext.SaveChangesAsync(cancellationToken);
         return true;
     }
@@ -220,8 +240,66 @@ public class UserService(IApplicationDbContext dbContext, IPasswordHasher passwo
             return false;
         }
 
-        user.IsActive = false;
-        user.UpdatedAt = DateTimeOffset.UtcNow;
+        // Remove assignments where this user is the assignee
+        var assignments = await dbContext.DocumentAssignments
+            .Where(a => a.UserId == id)
+            .ToListAsync(cancellationToken);
+        dbContext.DocumentAssignments.RemoveRange(assignments);
+
+        // Remove assignments where this user assigned others
+        var assignedByUser = await dbContext.DocumentAssignments
+            .Where(a => a.AssignedById == id)
+            .ToListAsync(cancellationToken);
+        dbContext.DocumentAssignments.RemoveRange(assignedByUser);
+
+        // Remove audits performed by this user
+        var audits = await dbContext.DocumentAudits
+            .Where(a => a.PerformedById == id)
+            .ToListAsync(cancellationToken);
+        dbContext.DocumentAudits.RemoveRange(audits);
+
+        // Remove notifications for this user
+        var notifications = await dbContext.Notifications
+            .Where(n => n.UserId == id)
+            .ToListAsync(cancellationToken);
+        dbContext.Notifications.RemoveRange(notifications);
+
+        // Delete documents created by this user (cascades handle their assignments/audits)
+        var documents = await dbContext.Documents
+            .Include(d => d.File)
+            .Where(d => d.CreatedById == id)
+            .ToListAsync(cancellationToken);
+
+        foreach (var doc in documents)
+        {
+            // Clear notifications referencing these documents
+            var docNotifications = await dbContext.Notifications
+                .Where(n => n.DocumentId == doc.Id)
+                .ToListAsync(cancellationToken);
+            foreach (var n in docNotifications)
+            {
+                n.DocumentId = null;
+            }
+        }
+
+        dbContext.Documents.RemoveRange(documents);
+
+        // Remove orphaned files
+        var fileIds = documents.Select(d => d.FileId).Distinct().ToList();
+        foreach (var fileId in fileIds)
+        {
+            var otherRefs = await dbContext.Documents.CountAsync(d => d.FileId == fileId && !documents.Select(x => x.Id).Contains(d.Id), cancellationToken);
+            if (otherRefs == 0)
+            {
+                var file = await dbContext.DocumentFiles.FirstOrDefaultAsync(f => f.Id == fileId, cancellationToken);
+                if (file is not null)
+                {
+                    dbContext.DocumentFiles.Remove(file);
+                }
+            }
+        }
+
+        dbContext.Users.Remove(user);
         await dbContext.SaveChangesAsync(cancellationToken);
         return true;
     }

@@ -12,7 +12,7 @@ public interface IDocumentService
     Task AssignAsync(Guid documentId, AssignDocumentRequest request, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<DocumentAssignmentDto>?> GetAssignmentsAsync(Guid documentId, CancellationToken cancellationToken = default);
     Task<bool> RemoveAssignmentAsync(Guid documentId, Guid assignmentId, CancellationToken cancellationToken = default);
-    Task<IReadOnlyList<DocumentDto>> GetMyAssignmentsAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<MyAssignmentDto>> GetMyAssignmentsAsync(CancellationToken cancellationToken = default);
     Task CompleteAssignmentAsync(Guid assignmentId, CancellationToken cancellationToken = default);
     Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default);
     Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default);

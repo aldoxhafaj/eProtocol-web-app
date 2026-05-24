@@ -112,10 +112,10 @@ public sealed class DocumentsController(IDocumentService documentService, IDocum
     }
 
     [HttpGet("my-assignments")]
-    public async Task<ActionResult<IReadOnlyList<DocumentDto>>> GetMyAssignments(CancellationToken cancellationToken)
+    public async Task<ActionResult<IReadOnlyList<MyAssignmentDto>>> GetMyAssignments(CancellationToken cancellationToken)
     {
-        var documents = await documentService.GetMyAssignmentsAsync(cancellationToken);
-        return Ok(documents);
+        var assignments = await documentService.GetMyAssignmentsAsync(cancellationToken);
+        return Ok(assignments);
     }
 
     [HttpPost("assignments/{assignmentId:guid}/complete")]

@@ -1,5 +1,4 @@
 using eProtocol.Application.Documents;
-using eProtocol.Application.Documents;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 

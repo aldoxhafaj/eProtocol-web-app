@@ -15,8 +15,7 @@ public interface IDocumentDeletionPolicy
 
 public class DocumentDeletionPolicy(
     IApplicationDbContext dbContext,
-    IUserContext userContext,
-    IFileStorage fileStorage) : IDocumentDeletionPolicy
+    IUserContext userContext) : IDocumentDeletionPolicy
 {
     public async Task<DeletionResult> EvaluateAsync(Guid documentId, CancellationToken cancellationToken = default)
     {
@@ -31,7 +30,7 @@ public class DocumentDeletionPolicy(
         var role = Enum.Parse<UserRole>(userContext.Role, true);
 
         // Admin can delete anything unconditionally
-        if (role == UserRole.Admin || role == UserRole.Admin)
+        if (role == UserRole.Admin)
             return new DeletionResult(true, 200, null);
 
         // Rule 4: Cannot delete a document with protocol number that is incoming/outgoing (official record)
@@ -83,7 +82,7 @@ public class DocumentDeletionPolicy(
         var otherReferences = await dbContext.Documents
             .CountAsync(d => d.FileId == document.FileId && d.Id != document.Id, cancellationToken);
 
-        dbContext.Documents.Remove(document);
+        dbContext.Documents.Remove(document); 
         if (otherReferences == 0)
         {
             dbContext.DocumentFiles.Remove(document.File);

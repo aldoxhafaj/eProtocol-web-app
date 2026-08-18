@@ -384,8 +384,7 @@ public class DocumentService(
 
     public async Task CompleteAssignmentAsync(Guid assignmentId, CancellationToken cancellationToken = default)
     {
-        var currentRole = userContext.Role;
-        if (string.Equals(currentRole, UserRole.Admin.ToString(), StringComparison.OrdinalIgnoreCase))
+        if (userContext.IsAdmin())
         {
             throw new UnauthorizedAccessException("Admins cannot complete assignments.");
         }
@@ -544,7 +543,7 @@ public class DocumentService(
                 throw new InvalidOperationException("Admin can only assign documents to managers or employees.");
             }
         }
-        else if (string.Equals(userContext.Role, UserRole.Manager.ToString(), StringComparison.OrdinalIgnoreCase))
+        else if (userContext.IsManager())
         {
             // Manager can only assign to Employees
             if (assignee.Role != UserRole.Employee)
@@ -560,14 +559,12 @@ public class DocumentService(
 
     private bool IsAdminOrManager()
     {
-        return string.Equals(userContext.Role, UserRole.Admin.ToString(), StringComparison.OrdinalIgnoreCase)
-            || string.Equals(userContext.Role, UserRole.Admin.ToString(), StringComparison.OrdinalIgnoreCase)
-            || string.Equals(userContext.Role, UserRole.Manager.ToString(), StringComparison.OrdinalIgnoreCase);
+        return userContext.IsAdminOrManager();
     }
 
     private bool IsAdmin()
     {
-        return string.Equals(userContext.Role, UserRole.Admin.ToString(), StringComparison.OrdinalIgnoreCase);
+        return userContext.IsAdmin();
     }
 
     private bool CanAccessDocumentFile(Document document)
@@ -589,7 +586,7 @@ public class DocumentService(
 
         if (document.Classification == DocumentClassification.Secret)
         {
-            return string.Equals(userContext.Role, UserRole.Manager.ToString(), StringComparison.OrdinalIgnoreCase)
+            return userContext.IsManager()
                 && document.Assignments.Any(a => a.UserId == userContext.UserId);
         }
 

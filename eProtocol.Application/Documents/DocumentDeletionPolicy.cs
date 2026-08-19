@@ -27,10 +27,8 @@ public class DocumentDeletionPolicy(
         if (document is null)
             return new DeletionResult(false, 404, "Document not found.");
 
-        var role = Enum.Parse<UserRole>(userContext.Role, true);
-
         // Admin can delete anything unconditionally
-        if (role == UserRole.Admin)
+        if (userContext.IsAdmin())
             return new DeletionResult(true, 200, null);
 
         // Rule 4: Cannot delete a document with protocol number that is incoming/outgoing (official record)
@@ -53,7 +51,7 @@ public class DocumentDeletionPolicy(
             return new DeletionResult(true, 200, null);
 
         // Manager can delete documents by employees in scope
-        if (role == UserRole.Manager)
+        if (userContext.IsManager())
             return new DeletionResult(true, 200, null);
 
         return new DeletionResult(false, 403, "You do not have permission to delete this document.");

@@ -431,24 +431,9 @@ public class DocumentService(
             return false;
         }
 
-        // Clear notification references
-        var notifications = await dbContext.Notifications
-            .Where(n => n.DocumentId == id)
-            .ToListAsync(cancellationToken);
-        foreach (var notification in notifications)
-        {
-            notification.DocumentId = null;
-        }
-
-        // Hard delete - cascades handle Assignments, Audits, AssignmentNotes
-        var otherReferences = await dbContext.Documents
-            .CountAsync(d => d.FileId == document.FileId && d.Id != document.Id, cancellationToken);
-
-        dbContext.Documents.Remove(document);
-        if (otherReferences == 0)
-        {
-            dbContext.DocumentFiles.Remove(document.File);
-        }
+        // Hard delete - cascades handle Assignments, Audits, AssignmentNotes;
+        // notification references are cleared and orphaned files removed.
+        await DocumentRemoval.RemoveWithOrphanFileAsync(dbContext, document, cancellationToken);
 
         await dbContext.SaveChangesAsync(cancellationToken);
         return true;

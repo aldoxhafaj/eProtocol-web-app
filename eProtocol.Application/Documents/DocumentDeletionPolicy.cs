@@ -66,25 +66,9 @@ public class DocumentDeletionPolicy(
 
         if (document is null) return;
 
-        // Clear notification references to avoid FK violation
-        var notifications = await dbContext.Notifications
-            .Where(n => n.DocumentId == document.Id)
-            .ToListAsync(cancellationToken);
-
-        foreach (var notification in notifications)
-        {
-            notification.DocumentId = null;
-        }
-
-        // Hard delete - cascades will handle Assignments, Audits, and AssignmentNotes
-        var otherReferences = await dbContext.Documents
-            .CountAsync(d => d.FileId == document.FileId && d.Id != document.Id, cancellationToken);
-
-        dbContext.Documents.Remove(document); 
-        if (otherReferences == 0)
-        {
-            dbContext.DocumentFiles.Remove(document.File);
-        }
+        // Hard delete - cascades will handle Assignments, Audits, and AssignmentNotes;
+        // notification references are cleared to avoid FK violations.
+        await DocumentRemoval.RemoveWithOrphanFileAsync(dbContext, document, cancellationToken);
 
         await dbContext.SaveChangesAsync(cancellationToken);
     }

@@ -177,29 +177,38 @@ public class UserService(IApplicationDbContext dbContext, IPasswordHasher passwo
 
     public async Task<IReadOnlyList<UserDto>> GetEmployeesInScopeAsync(CancellationToken cancellationToken = default)
     {
-        var manager = await dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userContext.UserId, cancellationToken);
+        var managerDepartment = await GetCurrentManagerDepartmentAsync(cancellationToken);
         IQueryable<User> query = dbContext.Users.AsNoTracking().Where(u => u.Role == UserRole.Employee);
 
-        if (manager is not null && !string.IsNullOrWhiteSpace(manager.Department))
+        if (managerDepartment is not null)
         {
-            query = query.Where(u => u.Department == manager.Department);
+            query = query.Where(u => u.Department == managerDepartment);
         }
 
         var users = await query.OrderBy(u => u.FullName).ToListAsync(cancellationToken);
         return users.Select(mapper.Map<UserDto>).ToList();
     }
 
+    /// <summary>
+    /// Returns the current user's department when it constrains employee visibility, otherwise null.
+    /// </summary>
+    private async Task<string?> GetCurrentManagerDepartmentAsync(CancellationToken cancellationToken)
+    {
+        var manager = await dbContext.Users.AsNoTracking()
+            .FirstOrDefaultAsync(u => u.Id == userContext.UserId, cancellationToken);
+
+        return string.IsNullOrWhiteSpace(manager?.Department) ? null : manager.Department;
+    }
+
+    private static bool IsOutsideScope(string? managerDepartment, User employee) =>
+        managerDepartment is not null && !string.Equals(employee.Department, managerDepartment, StringComparison.Ordinal);
+
     public async Task<UserDto?> GetEmployeeInScopeByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var manager = await dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userContext.UserId, cancellationToken);
+        var managerDepartment = await GetCurrentManagerDepartmentAsync(cancellationToken);
         var user = await dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id && u.Role == UserRole.Employee, cancellationToken);
 
-        if (user is null)
-        {
-            return null;
-        }
-
-        if (manager is not null && !string.IsNullOrWhiteSpace(manager.Department) && !string.Equals(user.Department, manager.Department, StringComparison.Ordinal))
+        if (user is null || IsOutsideScope(managerDepartment, user))
         {
             return null;
         }
@@ -209,14 +218,9 @@ public class UserService(IApplicationDbContext dbContext, IPasswordHasher passwo
 
     public async Task<UserDto?> UpdateEmployeeInScopeAsync(Guid id, UpdateUserRequest request, CancellationToken cancellationToken = default)
     {
-        var manager = await dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userContext.UserId, cancellationToken);
+        var managerDepartment = await GetCurrentManagerDepartmentAsync(cancellationToken);
         var user = await dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id && u.Role == UserRole.Employee, cancellationToken);
-        if (user is null)
-        {
-            return null;
-        }
-
-        if (manager is not null && !string.IsNullOrWhiteSpace(manager.Department) && !string.Equals(user.Department, manager.Department, StringComparison.Ordinal))
+        if (user is null || IsOutsideScope(managerDepartment, user))
         {
             return null;
         }
@@ -227,15 +231,10 @@ public class UserService(IApplicationDbContext dbContext, IPasswordHasher passwo
 
     public async Task<bool> DeleteEmployeeInScopeAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var manager = await dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userContext.UserId, cancellationToken);
+        var managerDepartment = await GetCurrentManagerDepartmentAsync(cancellationToken);
         var user = await dbContext.Users.FirstOrDefaultAsync(u => u.Id == id && u.Role == UserRole.Employee, cancellationToken);
 
-        if (user is null)
-        {
-            return false;
-        }
-
-        if (manager is not null && !string.IsNullOrWhiteSpace(manager.Department) && !string.Equals(user.Department, manager.Department, StringComparison.Ordinal))
+        if (user is null || IsOutsideScope(managerDepartment, user))
         {
             return false;
         }

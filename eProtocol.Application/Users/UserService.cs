@@ -239,17 +239,11 @@ public class UserService(IApplicationDbContext dbContext, IPasswordHasher passwo
             return false;
         }
 
-        // Remove assignments where this user is the assignee
+        // Remove assignments where this user is the assignee or assigned others
         var assignments = await dbContext.DocumentAssignments
-            .Where(a => a.UserId == id)
+            .Where(a => a.UserId == id || a.AssignedById == id)
             .ToListAsync(cancellationToken);
         dbContext.DocumentAssignments.RemoveRange(assignments);
-
-        // Remove assignments where this user assigned others
-        var assignedByUser = await dbContext.DocumentAssignments
-            .Where(a => a.AssignedById == id)
-            .ToListAsync(cancellationToken);
-        dbContext.DocumentAssignments.RemoveRange(assignedByUser);
 
         // Remove audits performed by this user
         var audits = await dbContext.DocumentAudits
@@ -269,16 +263,15 @@ public class UserService(IApplicationDbContext dbContext, IPasswordHasher passwo
             .Where(d => d.CreatedById == id)
             .ToListAsync(cancellationToken);
 
-        foreach (var doc in documents)
+        var documentIds = documents.Select(d => d.Id).ToList();
+
+        // Clear notifications referencing these documents
+        var documentNotifications = await dbContext.Notifications
+            .Where(n => n.DocumentId != null && documentIds.Contains(n.DocumentId.Value))
+            .ToListAsync(cancellationToken);
+        foreach (var notification in documentNotifications)
         {
-            // Clear notifications referencing these documents
-            var docNotifications = await dbContext.Notifications
-                .Where(n => n.DocumentId == doc.Id)
-                .ToListAsync(cancellationToken);
-            foreach (var n in docNotifications)
-            {
-                n.DocumentId = null;
-            }
+            notification.DocumentId = null;
         }
 
         dbContext.Documents.RemoveRange(documents);
@@ -287,7 +280,7 @@ public class UserService(IApplicationDbContext dbContext, IPasswordHasher passwo
         var fileIds = documents.Select(d => d.FileId).Distinct().ToList();
         foreach (var fileId in fileIds)
         {
-            var otherRefs = await dbContext.Documents.CountAsync(d => d.FileId == fileId && !documents.Select(x => x.Id).Contains(d.Id), cancellationToken);
+            var otherRefs = await dbContext.Documents.CountAsync(d => d.FileId == fileId && !documentIds.Contains(d.Id), cancellationToken);
             if (otherRefs == 0)
             {
                 var file = await dbContext.DocumentFiles.FirstOrDefaultAsync(f => f.Id == fileId, cancellationToken);

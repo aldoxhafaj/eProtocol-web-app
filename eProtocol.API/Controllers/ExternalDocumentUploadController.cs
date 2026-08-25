@@ -35,14 +35,9 @@ public sealed class ExternalDocumentUploadController(IDocumentService documentSe
     [HttpPost("upload")]
     public async Task<ActionResult<DocumentDto>> Upload([FromForm] CreateDocumentRequest request, IFormFile file, CancellationToken cancellationToken)
     {
-        if (file is null || file.Length == 0)
-            return BadRequest("File is required.");
-
-        if (FileValidation.ExceedsMaxSize(file.Length))
-            return BadRequest($"File size exceeds maximum of {FileValidation.MaxFileSize / (1024 * 1024)} MB.");
-
-        if (!FileValidation.IsValidContentType(file.ContentType))
-            return BadRequest("File type is not allowed.");
+        var validationError = FileValidationMessages.ValidateRequired(file);
+        if (validationError is not null)
+            return BadRequest(validationError);
 
         var document = await documentService.CreateAsync(request, file, cancellationToken);
         return Ok(document);

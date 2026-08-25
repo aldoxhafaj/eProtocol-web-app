@@ -27,19 +27,10 @@ public sealed class DocumentsController(IDocumentService documentService, IDocum
     [Authorize(Roles = "Admin,Manager,Employee")]
     public async Task<ActionResult<DocumentDto>> Create([FromForm] CreateDocumentRequest request, IFormFile file, CancellationToken cancellationToken)
     {
-        if (file is null || file.Length == 0)
+        var validationError = FileValidationMessages.ValidateRequired(file);
+        if (validationError is not null)
         {
-            return BadRequest("File is required.");
-        }
-
-        if (FileValidation.ExceedsMaxSize(file.Length))
-        {
-            return BadRequest($"File size exceeds maximum of {FileValidation.MaxFileSize / (1024 * 1024)} MB.");
-        }
-
-        if (!FileValidation.IsValidContentType(file.ContentType))
-        {
-            return BadRequest("File type is not allowed.");
+            return BadRequest(validationError);
         }
 
         var document = await documentService.CreateAsync(request, file, cancellationToken);

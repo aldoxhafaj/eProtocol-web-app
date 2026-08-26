@@ -22,14 +22,10 @@ public sealed class ScanController(IScannerService scannerService, IDocumentServ
         }
         else
         {
-            if (FileValidation.ExceedsMaxSize(file.Length))
+            var validationError = FileValidationMessages.ValidateContent(file);
+            if (validationError is not null)
             {
-                return BadRequest($"File size exceeds maximum of {FileValidation.MaxFileSize / (1024 * 1024)} MB.");
-            }
-
-            if (!FileValidation.IsValidContentType(file.ContentType))
-            {
-                return BadRequest("File type is not allowed.");
+                return BadRequest(validationError);
             }
 
             sourceFile = file;

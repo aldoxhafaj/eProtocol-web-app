@@ -19,6 +19,14 @@ public static class FileValidationMessages
             return FileRequired;
         }
 
+        return ValidateContent(file);
+    }
+
+    /// <summary>
+    /// Returns the size/content-type validation error for a file, or null when it is acceptable.
+    /// </summary>
+    public static string? ValidateContent(IFormFile file)
+    {
         if (FileValidation.ExceedsMaxSize(file.Length))
         {
             return MaxSizeExceeded;

@@ -1,4 +1,5 @@
 using System.Text;
+using eProtocol.API;
 using eProtocol.API.Middleware;
 using eProtocol.Application.Abstractions;
 using eProtocol.Application;
@@ -36,10 +37,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             OnTokenValidated = context =>
             {
-                var authHeader = context.Request.Headers.Authorization.ToString();
-                var token = authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
-                    ? authHeader["Bearer ".Length..].Trim()
-                    : authHeader.Trim();
+                var token = BearerToken.Extract(context.Request.Headers.Authorization);
 
                 if (!string.IsNullOrWhiteSpace(token))
                 {

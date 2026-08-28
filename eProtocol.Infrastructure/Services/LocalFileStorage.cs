@@ -10,9 +10,18 @@ public sealed class LocalFileStorage(IOptions<FileStorageOptions> options, IAppl
 {
     private readonly FileStorageOptions storageOptions = options.Value;
 
+    private string ResolveRoot() => Path.GetFullPath(storageOptions.RootPath, AppContext.BaseDirectory);
+
+    private Aes CreateAes()
+    {
+        var aes = Aes.Create();
+        aes.Key = Convert.FromBase64String(storageOptions.EncryptionKey);
+        return aes;
+    }
+
     public async Task<FileStorageResult> SaveAsync(FileStorageRequest request, CancellationToken cancellationToken = default)
     {
-        var root = Path.GetFullPath(storageOptions.RootPath, AppContext.BaseDirectory);
+        var root = ResolveRoot();
         Directory.CreateDirectory(root);
 
         // Read content into memory to compute hash first
@@ -54,8 +63,7 @@ public sealed class LocalFileStorage(IOptions<FileStorageOptions> options, IAppl
 
     public Task<Stream> OpenReadAsync(string storagePath, bool isEncrypted, CancellationToken cancellationToken = default)
     {
-        var root = Path.GetFullPath(storageOptions.RootPath, AppContext.BaseDirectory);
-        var fullPath = Path.Combine(root, storagePath);
+        var fullPath = Path.Combine(ResolveRoot(), storagePath);
 
         if (isEncrypted)
         {
@@ -68,8 +76,7 @@ public sealed class LocalFileStorage(IOptions<FileStorageOptions> options, IAppl
 
     private async Task EncryptAndWriteAsync(Stream input, string outputPath, CancellationToken cancellationToken)
     {
-        using var aes = Aes.Create();
-        aes.Key = Convert.FromBase64String(storageOptions.EncryptionKey);
+        using var aes = CreateAes();
         aes.GenerateIV();
 
         await using var output = File.Create(outputPath);
@@ -83,8 +90,7 @@ public sealed class LocalFileStorage(IOptions<FileStorageOptions> options, IAppl
 
     private async Task<Stream> DecryptAndReadAsync(string inputPath, CancellationToken cancellationToken)
     {
-        using var aes = Aes.Create();
-        aes.Key = Convert.FromBase64String(storageOptions.EncryptionKey);
+        using var aes = CreateAes();
 
         await using var input = File.OpenRead(inputPath);
         var iv = new byte[16];

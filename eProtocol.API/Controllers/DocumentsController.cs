@@ -82,7 +82,7 @@ public sealed class DocumentsController(IDocumentService documentService, IDocum
         }
         catch (InvalidOperationException ex)
         {
-            return ex.Message.Contains("not found", StringComparison.OrdinalIgnoreCase) ? NotFound() : Conflict(ex.Message);
+            return this.NotFoundOrConflict(ex);
         }
     }
 
@@ -153,7 +153,7 @@ public sealed class DocumentsController(IDocumentService documentService, IDocum
         }
         catch (InvalidOperationException ex)
         {
-            return ex.Message.Contains("not found", StringComparison.OrdinalIgnoreCase) ? NotFound() : Conflict(ex.Message);
+            return this.NotFoundOrConflict(ex);
         }
     }
 

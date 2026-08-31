@@ -1,4 +1,5 @@
 using System.Text;
+using eProtocol.API;
 using eProtocol.API.Middleware;
 using eProtocol.Application.Abstractions;
 using eProtocol.Application;
@@ -6,6 +7,7 @@ using eProtocol.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using eProtocol.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -36,10 +38,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             OnTokenValidated = context =>
             {
-                var authHeader = context.Request.Headers.Authorization.ToString();
-                var token = authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
-                    ? authHeader["Bearer ".Length..].Trim()
-                    : authHeader.Trim();
+                var token = BearerToken.Extract(context.Request.Headers.Authorization);
 
                 if (!string.IsNullOrWhiteSpace(token))
                 {
@@ -65,7 +64,30 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.AddSecurityDefinition(JwtBearerDefaults.AuthenticationScheme, new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Description = "Enter the JWT returned by /api/Auth/login. The 'Bearer ' prefix is added automatically.",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT"
+    });
+
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        [new OpenApiSecurityScheme
+        {
+            Reference = new OpenApiReference
+            {
+                Type = ReferenceType.SecurityScheme,
+                Id = JwtBearerDefaults.AuthenticationScheme
+            }
+        }] = Array.Empty<string>()
+    });
+});
 
 var app = builder.Build();
 

@@ -59,13 +59,25 @@ public class ReportService(IApplicationDbContext dbContext, IMapper mapper) : IR
 
         var docs = await query.Select(d => new { d.Type, d.Classification }).ToListAsync(cancellationToken);
 
-        return new GeneralStatisticsDto(
-            docs.Count(d => d.Type == DocumentType.IncomingExternal),
-            docs.Count(d => d.Type == DocumentType.OutgoingExternal),
-            docs.Count(d => d.Type == DocumentType.Internal),
-            docs.Count(d => d.Classification == DocumentClassification.Public),
-            docs.Count(d => d.Classification == DocumentClassification.Restricted),
-            docs.Count(d => d.Classification == DocumentClassification.Secret));
+        int incoming = 0, outgoing = 0, internalCount = 0, publicCount = 0, restricted = 0, secret = 0;
+        foreach (var doc in docs)
+        {
+            switch (doc.Type)
+            {
+                case DocumentType.IncomingExternal: incoming++; break;
+                case DocumentType.OutgoingExternal: outgoing++; break;
+                case DocumentType.Internal: internalCount++; break;
+            }
+
+            switch (doc.Classification)
+            {
+                case DocumentClassification.Public: publicCount++; break;
+                case DocumentClassification.Restricted: restricted++; break;
+                case DocumentClassification.Secret: secret++; break;
+            }
+        }
+
+        return new GeneralStatisticsDto(incoming, outgoing, internalCount, publicCount, restricted, secret);
     }
 
     public async Task<IReadOnlyList<DocumentDto>> GetByPriorityAsync(CancellationToken cancellationToken = default)

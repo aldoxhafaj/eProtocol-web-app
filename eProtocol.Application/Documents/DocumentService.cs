@@ -384,8 +384,7 @@ public class DocumentService(
 
     public async Task CompleteAssignmentAsync(Guid assignmentId, CancellationToken cancellationToken = default)
     {
-        var currentRole = userContext.Role;
-        if (string.Equals(currentRole, UserRole.Admin.ToString(), StringComparison.OrdinalIgnoreCase))
+        if (userContext.IsAdmin())
         {
             throw new UnauthorizedAccessException("Admins cannot complete assignments.");
         }
@@ -432,24 +431,9 @@ public class DocumentService(
             return false;
         }
 
-        // Clear notification references
-        var notifications = await dbContext.Notifications
-            .Where(n => n.DocumentId == id)
-            .ToListAsync(cancellationToken);
-        foreach (var notification in notifications)
-        {
-            notification.DocumentId = null;
-        }
-
-        // Hard delete - cascades handle Assignments, Audits, AssignmentNotes
-        var otherReferences = await dbContext.Documents
-            .CountAsync(d => d.FileId == document.FileId && d.Id != document.Id, cancellationToken);
-
-        dbContext.Documents.Remove(document);
-        if (otherReferences == 0)
-        {
-            dbContext.DocumentFiles.Remove(document.File);
-        }
+        // Hard delete - cascades handle Assignments, Audits, AssignmentNotes;
+        // notification references are cleared and orphaned files removed.
+        await DocumentRemoval.RemoveWithOrphanFileAsync(dbContext, document, cancellationToken);
 
         await dbContext.SaveChangesAsync(cancellationToken);
         return true;
@@ -544,7 +528,7 @@ public class DocumentService(
                 throw new InvalidOperationException("Admin can only assign documents to managers or employees.");
             }
         }
-        else if (string.Equals(userContext.Role, UserRole.Manager.ToString(), StringComparison.OrdinalIgnoreCase))
+        else if (userContext.IsManager())
         {
             // Manager can only assign to Employees
             if (assignee.Role != UserRole.Employee)
@@ -560,14 +544,12 @@ public class DocumentService(
 
     private bool IsAdminOrManager()
     {
-        return string.Equals(userContext.Role, UserRole.Admin.ToString(), StringComparison.OrdinalIgnoreCase)
-            || string.Equals(userContext.Role, UserRole.Admin.ToString(), StringComparison.OrdinalIgnoreCase)
-            || string.Equals(userContext.Role, UserRole.Manager.ToString(), StringComparison.OrdinalIgnoreCase);
+        return userContext.IsAdminOrManager();
     }
 
     private bool IsAdmin()
     {
-        return string.Equals(userContext.Role, UserRole.Admin.ToString(), StringComparison.OrdinalIgnoreCase);
+        return userContext.IsAdmin();
     }
 
     private bool CanAccessDocumentFile(Document document)
@@ -589,7 +571,7 @@ public class DocumentService(
 
         if (document.Classification == DocumentClassification.Secret)
         {
-            return string.Equals(userContext.Role, UserRole.Manager.ToString(), StringComparison.OrdinalIgnoreCase)
+            return userContext.IsManager()
                 && document.Assignments.Any(a => a.UserId == userContext.UserId);
         }
 

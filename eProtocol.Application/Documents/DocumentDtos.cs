@@ -1,5 +1,4 @@
 using eProtocol.Domain.Enums;
-using eProtocol.Domain.Enums;
 using Microsoft.AspNetCore.Http;
 
 namespace eProtocol.Application.Documents;

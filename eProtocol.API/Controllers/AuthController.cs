@@ -27,10 +27,7 @@ public sealed class AuthController(IAuthService authService) : ControllerBase
     [Authorize]
     public async Task<IActionResult> Logout(CancellationToken cancellationToken)
     {
-        var authHeader = Request.Headers.Authorization.ToString();
-        var token = authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
-            ? authHeader["Bearer ".Length..].Trim()
-            : authHeader.Trim();
+        var token = BearerToken.Extract(Request.Headers.Authorization);
 
         await authService.LogoutAsync(token, cancellationToken);
         return Ok();

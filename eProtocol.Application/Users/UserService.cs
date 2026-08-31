@@ -177,29 +177,38 @@ public class UserService(IApplicationDbContext dbContext, IPasswordHasher passwo
 
     public async Task<IReadOnlyList<UserDto>> GetEmployeesInScopeAsync(CancellationToken cancellationToken = default)
     {
-        var manager = await dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userContext.UserId, cancellationToken);
+        var managerDepartment = await GetCurrentManagerDepartmentAsync(cancellationToken);
         IQueryable<User> query = dbContext.Users.AsNoTracking().Where(u => u.Role == UserRole.Employee);
 
-        if (manager is not null && !string.IsNullOrWhiteSpace(manager.Department))
+        if (managerDepartment is not null)
         {
-            query = query.Where(u => u.Department == manager.Department);
+            query = query.Where(u => u.Department == managerDepartment);
         }
 
         var users = await query.OrderBy(u => u.FullName).ToListAsync(cancellationToken);
         return users.Select(mapper.Map<UserDto>).ToList();
     }
 
+    /// <summary>
+    /// Returns the current user's department when it constrains employee visibility, otherwise null.
+    /// </summary>
+    private async Task<string?> GetCurrentManagerDepartmentAsync(CancellationToken cancellationToken)
+    {
+        var manager = await dbContext.Users.AsNoTracking()
+            .FirstOrDefaultAsync(u => u.Id == userContext.UserId, cancellationToken);
+
+        return string.IsNullOrWhiteSpace(manager?.Department) ? null : manager.Department;
+    }
+
+    private static bool IsOutsideScope(string? managerDepartment, User employee) =>
+        managerDepartment is not null && !string.Equals(employee.Department, managerDepartment, StringComparison.Ordinal);
+
     public async Task<UserDto?> GetEmployeeInScopeByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var manager = await dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userContext.UserId, cancellationToken);
+        var managerDepartment = await GetCurrentManagerDepartmentAsync(cancellationToken);
         var user = await dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id && u.Role == UserRole.Employee, cancellationToken);
 
-        if (user is null)
-        {
-            return null;
-        }
-
-        if (manager is not null && !string.IsNullOrWhiteSpace(manager.Department) && !string.Equals(user.Department, manager.Department, StringComparison.Ordinal))
+        if (user is null || IsOutsideScope(managerDepartment, user))
         {
             return null;
         }
@@ -209,14 +218,9 @@ public class UserService(IApplicationDbContext dbContext, IPasswordHasher passwo
 
     public async Task<UserDto?> UpdateEmployeeInScopeAsync(Guid id, UpdateUserRequest request, CancellationToken cancellationToken = default)
     {
-        var manager = await dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userContext.UserId, cancellationToken);
+        var managerDepartment = await GetCurrentManagerDepartmentAsync(cancellationToken);
         var user = await dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id && u.Role == UserRole.Employee, cancellationToken);
-        if (user is null)
-        {
-            return null;
-        }
-
-        if (manager is not null && !string.IsNullOrWhiteSpace(manager.Department) && !string.Equals(user.Department, manager.Department, StringComparison.Ordinal))
+        if (user is null || IsOutsideScope(managerDepartment, user))
         {
             return null;
         }
@@ -227,30 +231,19 @@ public class UserService(IApplicationDbContext dbContext, IPasswordHasher passwo
 
     public async Task<bool> DeleteEmployeeInScopeAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var manager = await dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userContext.UserId, cancellationToken);
+        var managerDepartment = await GetCurrentManagerDepartmentAsync(cancellationToken);
         var user = await dbContext.Users.FirstOrDefaultAsync(u => u.Id == id && u.Role == UserRole.Employee, cancellationToken);
 
-        if (user is null)
+        if (user is null || IsOutsideScope(managerDepartment, user))
         {
             return false;
         }
 
-        if (manager is not null && !string.IsNullOrWhiteSpace(manager.Department) && !string.Equals(user.Department, manager.Department, StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        // Remove assignments where this user is the assignee
+        // Remove assignments where this user is the assignee or assigned others
         var assignments = await dbContext.DocumentAssignments
-            .Where(a => a.UserId == id)
+            .Where(a => a.UserId == id || a.AssignedById == id)
             .ToListAsync(cancellationToken);
         dbContext.DocumentAssignments.RemoveRange(assignments);
-
-        // Remove assignments where this user assigned others
-        var assignedByUser = await dbContext.DocumentAssignments
-            .Where(a => a.AssignedById == id)
-            .ToListAsync(cancellationToken);
-        dbContext.DocumentAssignments.RemoveRange(assignedByUser);
 
         // Remove audits performed by this user
         var audits = await dbContext.DocumentAudits
@@ -270,16 +263,15 @@ public class UserService(IApplicationDbContext dbContext, IPasswordHasher passwo
             .Where(d => d.CreatedById == id)
             .ToListAsync(cancellationToken);
 
-        foreach (var doc in documents)
+        var documentIds = documents.Select(d => d.Id).ToList();
+
+        // Clear notifications referencing these documents
+        var documentNotifications = await dbContext.Notifications
+            .Where(n => n.DocumentId != null && documentIds.Contains(n.DocumentId.Value))
+            .ToListAsync(cancellationToken);
+        foreach (var notification in documentNotifications)
         {
-            // Clear notifications referencing these documents
-            var docNotifications = await dbContext.Notifications
-                .Where(n => n.DocumentId == doc.Id)
-                .ToListAsync(cancellationToken);
-            foreach (var n in docNotifications)
-            {
-                n.DocumentId = null;
-            }
+            notification.DocumentId = null;
         }
 
         dbContext.Documents.RemoveRange(documents);
@@ -288,7 +280,7 @@ public class UserService(IApplicationDbContext dbContext, IPasswordHasher passwo
         var fileIds = documents.Select(d => d.FileId).Distinct().ToList();
         foreach (var fileId in fileIds)
         {
-            var otherRefs = await dbContext.Documents.CountAsync(d => d.FileId == fileId && !documents.Select(x => x.Id).Contains(d.Id), cancellationToken);
+            var otherRefs = await dbContext.Documents.CountAsync(d => d.FileId == fileId && !documentIds.Contains(d.Id), cancellationToken);
             if (otherRefs == 0)
             {
                 var file = await dbContext.DocumentFiles.FirstOrDefaultAsync(f => f.Id == fileId, cancellationToken);

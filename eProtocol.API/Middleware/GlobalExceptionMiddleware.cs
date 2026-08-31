@@ -13,30 +13,24 @@ public sealed class GlobalExceptionMiddleware(RequestDelegate next, ILogger<Glob
         }
         catch (UnauthorizedAccessException)
         {
-            context.Response.StatusCode = (int)HttpStatusCode.Forbidden;
-            context.Response.ContentType = "application/json";
-            await context.Response.WriteAsync(JsonSerializer.Serialize(new { error = "Access denied." }));
+            await WriteErrorAsync(context, HttpStatusCode.Forbidden, "Access denied.");
         }
-        catch (InvalidOperationException ex)
+        catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException)
         {
             logger.LogWarning(ex, "Domain error: {Message}", ex.Message);
-            context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
-            context.Response.ContentType = "application/json";
-            await context.Response.WriteAsync(JsonSerializer.Serialize(new { error = ex.Message }));
-        }
-        catch (NotSupportedException ex)
-        {
-            logger.LogWarning(ex, "Not supported: {Message}", ex.Message);
-            context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
-            context.Response.ContentType = "application/json";
-            await context.Response.WriteAsync(JsonSerializer.Serialize(new { error = ex.Message }));
+            await WriteErrorAsync(context, HttpStatusCode.BadRequest, ex.Message);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Unhandled exception");
-            context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
-            context.Response.ContentType = "application/json";
-            await context.Response.WriteAsync(JsonSerializer.Serialize(new { error = "An unexpected error occurred." }));
+            await WriteErrorAsync(context, HttpStatusCode.InternalServerError, "An unexpected error occurred.");
         }
+    }
+
+    private static Task WriteErrorAsync(HttpContext context, HttpStatusCode statusCode, string message)
+    {
+        context.Response.StatusCode = (int)statusCode;
+        context.Response.ContentType = "application/json";
+        return context.Response.WriteAsync(JsonSerializer.Serialize(new { error = message }));
     }
 }

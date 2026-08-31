@@ -15,8 +15,7 @@ public interface IDocumentDeletionPolicy
 
 public class DocumentDeletionPolicy(
     IApplicationDbContext dbContext,
-    IUserContext userContext,
-    IFileStorage fileStorage) : IDocumentDeletionPolicy
+    IUserContext userContext) : IDocumentDeletionPolicy
 {
     public async Task<DeletionResult> EvaluateAsync(Guid documentId, CancellationToken cancellationToken = default)
     {
@@ -28,10 +27,8 @@ public class DocumentDeletionPolicy(
         if (document is null)
             return new DeletionResult(false, 404, "Document not found.");
 
-        var role = Enum.Parse<UserRole>(userContext.Role, true);
-
         // Admin can delete anything unconditionally
-        if (role == UserRole.Admin || role == UserRole.Admin)
+        if (userContext.IsAdmin())
             return new DeletionResult(true, 200, null);
 
         // Rule 4: Cannot delete a document with protocol number that is incoming/outgoing (official record)
@@ -54,7 +51,7 @@ public class DocumentDeletionPolicy(
             return new DeletionResult(true, 200, null);
 
         // Manager can delete documents by employees in scope
-        if (role == UserRole.Manager)
+        if (userContext.IsManager())
             return new DeletionResult(true, 200, null);
 
         return new DeletionResult(false, 403, "You do not have permission to delete this document.");
@@ -69,25 +66,9 @@ public class DocumentDeletionPolicy(
 
         if (document is null) return;
 
-        // Clear notification references to avoid FK violation
-        var notifications = await dbContext.Notifications
-            .Where(n => n.DocumentId == document.Id)
-            .ToListAsync(cancellationToken);
-
-        foreach (var notification in notifications)
-        {
-            notification.DocumentId = null;
-        }
-
-        // Hard delete - cascades will handle Assignments, Audits, and AssignmentNotes
-        var otherReferences = await dbContext.Documents
-            .CountAsync(d => d.FileId == document.FileId && d.Id != document.Id, cancellationToken);
-
-        dbContext.Documents.Remove(document);
-        if (otherReferences == 0)
-        {
-            dbContext.DocumentFiles.Remove(document.File);
-        }
+        // Hard delete - cascades will handle Assignments, Audits, and AssignmentNotes;
+        // notification references are cleared to avoid FK violations.
+        await DocumentRemoval.RemoveWithOrphanFileAsync(dbContext, document, cancellationToken);
 
         await dbContext.SaveChangesAsync(cancellationToken);
     }

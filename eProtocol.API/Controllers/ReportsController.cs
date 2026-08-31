@@ -1,5 +1,4 @@
 using eProtocol.Application.Documents;
-using eProtocol.Application.Documents;
 using eProtocol.Application.Reports;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;

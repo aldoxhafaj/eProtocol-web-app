@@ -27,7 +27,7 @@ public sealed class TrackingController(ITrackingService trackingService) : Contr
         }
         catch (InvalidOperationException ex)
         {
-            return ex.Message.Contains("not found", StringComparison.OrdinalIgnoreCase) ? NotFound() : Conflict(ex.Message);
+            return this.NotFoundOrConflict(ex);
         }
     }
 
@@ -42,7 +42,7 @@ public sealed class TrackingController(ITrackingService trackingService) : Contr
         }
         catch (InvalidOperationException ex)
         {
-            return ex.Message.Contains("not found", StringComparison.OrdinalIgnoreCase) ? NotFound() : Conflict(ex.Message);
+            return this.NotFoundOrConflict(ex);
         }
     }
 
@@ -71,7 +71,7 @@ public sealed class TrackingController(ITrackingService trackingService) : Contr
         }
         catch (InvalidOperationException ex)
         {
-            return ex.Message.Contains("not found", StringComparison.OrdinalIgnoreCase) ? NotFound() : Conflict(ex.Message);
+            return this.NotFoundOrConflict(ex);
         }
     }
 
@@ -85,7 +85,7 @@ public sealed class TrackingController(ITrackingService trackingService) : Contr
         }
         catch (InvalidOperationException ex)
         {
-            return ex.Message.Contains("not found", StringComparison.OrdinalIgnoreCase) ? NotFound() : Conflict(ex.Message);
+            return this.NotFoundOrConflict(ex);
         }
     }
 }
